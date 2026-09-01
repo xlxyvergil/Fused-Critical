@@ -1,0 +1,38 @@
+modLoader="javafml" #mandatory
+
+loaderVersion="${loader_version_range}" #mandatory
+
+authors="${author}" #optional
+
+license="All Rights Reserved" #mandatory
+
+[[mods]] #mandatory
+
+modId="${modid}" #mandatory
+
+version="${version}" #mandatory
+
+displayName="${modName}" #mandatory
+
+description='''${desc}'''
+
+[[dependencies.${modid}]]
+    modId="forge"
+    mandatory=true
+    versionRange="${forge_version_range}"
+    ordering="NONE"
+    side="BOTH"
+
+[[dependencies.${modid}]]
+    modId="minecraft"
+    mandatory=true
+    versionRange="${minecraft_version_range}"
+    ordering="NONE"
+    side="BOTH"
+
+[[dependencies.${modid}]]
+    modId="curios"
+    mandatory=false
+    versionRange="[5,)"
+    ordering="AFTER"
+    side="BOTH"
