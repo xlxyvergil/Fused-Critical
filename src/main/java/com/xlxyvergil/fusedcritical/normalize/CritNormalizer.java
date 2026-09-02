@@ -8,7 +8,6 @@ import net.minecraft.world.entity.ai.attributes.AttributeInstance;
 import net.minecraft.world.entity.ai.attributes.AttributeModifier;
 
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -45,29 +44,28 @@ public final class CritNormalizer {
         }
         final Map<Attribute, Map<UUID, UUID>> perTarget =
                 cap.migration().computeIfAbsent(target, k -> new HashMap<>());
-        // 跨源累积已占用 UUID，避免迁移新 UUID 时撞上
-        final Set<UUID> occupied = new HashSet<>();
         int moved = 0;
         for (final Attribute src : srcs) {
             final Map<UUID, UUID> srcMap = perTarget.computeIfAbsent(src, k -> new HashMap<>());
-            // 撤销上次本类迁移到接收方的、来自该源的修饰符
+            // 撤销上次本类迁移到接收方的、来自该源的修饰符（只撤销本源真实添加过的）
             for (final UUID migratedId : srcMap.values()) {
                 instance.removeModifier(migratedId);
             }
             srcMap.clear();
-            // 收集源上当前的真实修饰符（排除本类 FC_ZERO/FC_MIGRATE），记下它们占用的 UUID
+            // 收集源上当前的真实修饰符（排除本类 FC_ZERO/FC_MIGRATE）
             final List<AttributeModifier> collected = ContributionCalc.collect(entity, src);
             for (final AttributeModifier mod : collected) {
-                occupied.add(mod.getId());
-            }
-            // 挑不冲突的新 UUID 加到接收方，记录源 UUID → 接收方新 UUID
-            for (final AttributeModifier mod : collected) {
-                final UUID newId = newAvailableUuid(occupied);
-                occupied.add(newId);
-                instance.addTransientModifier(
-                        new AttributeModifier(newId, mod.getName(), mod.getAmount(), mod.getOperation()));
-                srcMap.put(mod.getId(), newId);
-                moved++;
+                // 复用源修饰符自身的 UUID：同一加成（如同一个全属性加持）落到多个源属性时，
+                // 目标属性上只保留一份，避免同一加成被重复计数
+                final UUID newId = mod.getId();
+                // 目标属性上已有相同 UUID 则跳过，避免 addTransientModifier 对重复 UUID 崩溃，
+                // 也保证「一个加成只生效一次」
+                if (!hasModifier(instance, newId)) {
+                    instance.addTransientModifier(
+                            new AttributeModifier(newId, mod.getName(), mod.getAmount(), mod.getOperation()));
+                    srcMap.put(mod.getId(), newId);
+                    moved++;
+                }
             }
             // 源属性归 0
             zeroOut(entity, src);
@@ -86,13 +84,14 @@ public final class CritNormalizer {
         }
     }
 
-    // 生成一个不与已占用 UUID 冲突的随机 UUID
-    private static UUID newAvailableUuid(final Set<UUID> occupied) {
-        UUID id;
-        do {
-            id = UUID.randomUUID();
-        } while (occupied.contains(id));
-        return id;
+    // 接收方属性上是否已存在指定 UUID 的修饰符
+    private static boolean hasModifier(final AttributeInstance instance, final UUID id) {
+        for (final AttributeModifier mod : instance.getModifiers()) {
+            if (mod.getId().equals(id)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     // 给源属性加 FC_ZERO（MULTIPLY_TOTAL = -1.0）让其恒为 0

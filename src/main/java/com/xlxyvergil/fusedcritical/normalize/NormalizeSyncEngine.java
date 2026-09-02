@@ -49,11 +49,6 @@ public final class NormalizeSyncEngine {
         CritNormalizer.normalize(event.getEntity());
     }
 
-    @SubscribeEvent
-    public static void onEffectExpired(MobEffectEvent.Expired event) {
-        CritNormalizer.normalize(event.getEntity());
-    }
-
     // 归一化凶手，并清理被击杀者的记录
     @SubscribeEvent
     public static void onDeath(LivingDeathEvent event) {
