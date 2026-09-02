@@ -174,7 +174,7 @@ com.xlxyvergil.fusedcritical
 ├── normalize/CritNormalizer.java          # 单实体：读取源修饰符数据 → 新建「临时」修饰符挂到自有属性 → 给源加 FC_ZERO 归 0（transient，不写档，死亡自动清，事件驱动重建）
 ├── normalize/NormalizeSyncEngine.java     # 事件驱动的同步引擎（加入世界/换装/重生/换维度/药水增减/击杀）
 ├── normalize/FusedModifierIds.java        # 硬编码 UUID：FC_ZERO（归 0）、FC_MIGRATE
-├── config/FusedConfig.java                # 仅 critRateIds / critDamageIds（绝对特殊才填，默认空）
+├── config/FusedConfig.java                # 配置项：critRateIds / critDamageIds（手动补漏）、normalizeRateId / normalizeDamageId（归一接收方，默认本模组自有）
 ├── combat/CritCombatHandler.java          # ★LivingHurtEvent 统一结算：Warframe 分级暴击（tier=floor(rate)，frac 概率升级，倍率=1+tier×(dmg-1)），覆盖近战/投射物/法术；结算后服务端发包显示伤害数字并喂 DuMmmMmmy 假人★
 ├── network/NetworkHandler.java            # 建通道 + 注册消息；server 侧向追踪者发包
 ├── network/ClientboundDamageNumberPacket.java  # 服务端→客户端伤害数字包（实体 id、结算值、暴击等级）
@@ -192,8 +192,11 @@ com.xlxyvergil.fusedcritical
 |---|---|---|
 | `critRateIds` | 自动扫描漏掉、需额外当作暴击率的完整属性 id（`modid:path`），绝对特殊才填 | 空 |
 | `critDamageIds` | 自动扫描漏掉、需额外当作暴击伤害的完整属性 id | 空 |
+| `normalizeRateId` | 归一接收方（暴击率）：收集到的暴击率修饰符迁移到该属性；可改为其他 mod 的属性 id | `fusedcritical:crit_chance` |
+| `normalizeDamageId` | 归一接收方（暴击伤害）：收集到的暴击伤害修饰符迁移到该属性；可改为其他 mod 的属性 id | `fusedcritical:crit_damage` |
 
 > 常规识别全靠 `CritAttributeDetector` 按属性路径关键字自动扫描，配置项只做「特殊情况手动补漏」，默认保持空即可。
+> 归一接收方会被 `CritAttributeDetector` 排除出源集合（不归 0、不收集、避免自迁移），因此「想排除某个暴击属性」等价于「把它设为归一接收方」，无需额外黑名单。
 
 ---
 

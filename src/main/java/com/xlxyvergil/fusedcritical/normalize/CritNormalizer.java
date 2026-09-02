@@ -1,6 +1,6 @@
 package com.xlxyvergil.fusedcritical.normalize;
 
-import com.xlxyvergil.fusedcritical.attribute.FusedAttributes;
+import com.xlxyvergil.fusedcritical.config.FusedConfig;
 import com.xlxyvergil.fusedcritical.detect.CritAttributeDetector;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.ai.attributes.Attribute;
@@ -14,7 +14,7 @@ import java.util.Set;
 import java.util.UUID;
 
 // 单实体归一化：对每个外部源属性执行「归 0 → 迁移修饰符」。
-// 归 0 是给源属性加 FC_ZERO（MULTIPLY_TOTAL = -1.0）让它恒为 0；迁移是把源属性上「有效」的修饰符原样复制到本模组自有属性上。
+// 归 0 是给源属性加 FC_ZERO（MULTIPLY_TOTAL = -1.0）让它恒为 0；迁移是把源属性上「有效」的修饰符原样复制到归一接收方（默认本模组自有属性）上。
 // 迁移不做数值换算，沿用源修饰符的名字/op/amount，但 UUID 改为新生成的随机值（需要避开源上已用的 UUID），
 // 从而避免全属性加成饰品复用同一 UUID 时重复添加崩溃；所以源属性默认值不会带入。
 public final class CritNormalizer {
@@ -31,16 +31,16 @@ public final class CritNormalizer {
         }
         final CritAttributeDetector.Sources sources = CritAttributeDetector.detect();
 
-        // 迁移「暴击率」类别：把各源属性上的有效修饰符改挂到本模组自有暴击率上
-        migrate(entity, sources.rate(), FusedAttributes.CRIT_CHANCE.get());
+        // 迁移「暴击率」类别：把各源属性上的有效修饰符改挂到配置指定的归一接收方（默认本模组自有暴击率）上
+        migrate(entity, sources.rate(), FusedConfig.normalizeRate());
 
         // 迁移「暴击伤害」类别：同上
-        migrate(entity, sources.damage(), FusedAttributes.CRIT_DAMAGE.get());
+        migrate(entity, sources.damage(), FusedConfig.normalizeDamage());
     }
 
-    // 迁移一个类别：先清空自有属性上一次的修饰符，再遍历该类别所有源属性，
+    // 迁移一个类别：先清空归一接收方上一次的修饰符，再遍历该类别所有源属性，
     // 读取它们各自的属性修饰符数据（UUID/名字/数值/算法），用这些数据新建一个「临时」修饰符，
-    // 挂到本模组自有属性上（归属属性用的是我们自己的，不写入存档，死亡或属性表重建时会自动清空，由事件驱动重新镜像），
+    // 挂到归一接收方上（归属属性用的是接收方，不写入存档，死亡或属性表重建时会自动清空，由事件驱动重新镜像），
     // 最后给该源属性归 0。
     // 注意：只能在整个迁移前清空一次；若每迭代一个源就清空重加，同类别有多个源时后一个会覆盖前一个。
     private static int migrate(final LivingEntity entity, final Set<Attribute> srcs,

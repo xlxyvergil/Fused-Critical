@@ -1,7 +1,7 @@
 package com.xlxyvergil.fusedcritical.combat;
 
 import com.xlxyvergil.fusedcritical.FusedCritical;
-import com.xlxyvergil.fusedcritical.attribute.FusedAttributes;
+import com.xlxyvergil.fusedcritical.config.FusedConfig;
 import com.xlxyvergil.fusedcritical.compat.dummmmmmy.DummmmmmyCompat;
 import com.xlxyvergil.fusedcritical.network.NetworkHandler;
 import net.minecraft.resources.ResourceLocation;
@@ -79,8 +79,8 @@ public final class CritCombatHandler {
     // 攻击者不存在（无来源实体）就用默认 0.2 / 1.5。
     private static double[] resolveParams(LivingHurtEvent event) {
         if (event.getSource().getEntity() instanceof LivingEntity attacker) {
-            AttributeInstance chanceIns = attacker.getAttribute(FusedAttributes.CRIT_CHANCE.get());
-            AttributeInstance dmgIns = attacker.getAttribute(FusedAttributes.CRIT_DAMAGE.get());
+            AttributeInstance chanceIns = attacker.getAttribute(FusedConfig.normalizeRate());
+            AttributeInstance dmgIns = attacker.getAttribute(FusedConfig.normalizeDamage());
             if (chanceIns == null || dmgIns == null) {
                 return null;
             }
