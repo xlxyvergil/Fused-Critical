@@ -7,22 +7,27 @@ import com.xlxyvergil.fusedcritical.network.NetworkHandler;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.ai.attributes.AttributeInstance;
+import net.minecraftforge.event.entity.living.LivingDamageEvent;
 import net.minecraftforge.event.entity.living.LivingHurtEvent;
 import net.minecraftforge.eventbus.api.EventPriority;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.registries.ForgeRegistries;
 
-// 消费端：监听 LivingHurtEvent，用本模组自有的暴击率/暴击伤害统一结算暴击。
-// LivingHurtEvent 对任意伤害类型都会触发，所以近战/投射物/法术都能覆盖。
-// 暴击模型用 Warframe 分级暴击：暴击率 1.0 = 100% 且允许溢出；暴击等级 tier = floor(crit_chance)，
-// 小数部分以 frac 的概率升一级；该次倍率 = 1 + tier x (crit_damage - 1)。
+import java.util.HashMap;
+import java.util.Map;
+
+// LivingHurtEvent 结算暴击，LivingDamageEvent 显示伤害数字。
+// 暴击走 Warframe 分级：tier = floor(crit_chance)，小数部分以概率升一级，倍率 = 1 + tier x (crit_damage - 1)。
 @Mod.EventBusSubscriber(modid = FusedCritical.MODID)
 public final class CritCombatHandler {
 
     // 攻击者不存在（无来源实体）时使用的默认暴击判定参数
     private static final double DEFAULT_CRIT_CHANCE = 0.2D;
     private static final double DEFAULT_CRIT_DAMAGE = 1.5D;
+
+    // 本次实际 roll 出的暴击等级，hurt 记录、damage 读取后移除，按是否真暴击着色
+    private static final Map<Integer, Integer> PENDING_TIER = new HashMap<>();
 
     private CritCombatHandler() {}
 
@@ -46,37 +51,63 @@ public final class CritCombatHandler {
         // 实际倍率 = 1 + tier x (crit_damage - 1)
         double multiplier = 1.0D + tier * (critDamage - 1.0D);
 
-        // 有暴击才改伤害，没有就把等级归 0（消息里只用于区分普通/一级橙/二级及以上红）
         if (multiplier > 1.0D + 1.0E-6D) {
             event.setAmount(event.getAmount() * (float) multiplier);
-        } else {
-            tier = 0;
         }
 
-        // 服务端才向所有追踪者发包显示伤害数字（在单机里集成服务器也满足 !isClientSide）。
-        boolean serverSide = !event.getEntity().level().isClientSide && event.getAmount() != 0.0F;
-        if (isDuMmmMmmyDummy(event.getEntity())) {
-            // DuMmmMmmy 假人：伤害数字由它自己显示（我们不发自己的数字包，避免双重数字/颜色冲突）。
-            // 但只要本次命中了我们的统合暴击，就把暴击倍率喂给 DuMmmMmmy，
-            // 让它在显示数字时按暴击规则着色/显示倍率。
-            if (serverSide && multiplier > 1.0D + 1.0E-6D
-                    && event.getSource().getEntity() instanceof LivingEntity attacker) {
-                DummmmmmyCompat.tryFeedCrit(event.getEntity(), attacker, (float) multiplier);
-            }
-        } else if (serverSide) {
-            NetworkHandler.sendDamageNumber(event.getEntity(), event.getAmount(), tier);
+        // 这里的 amount 是护甲前的原始值，只在此结算；把 tier 记下来给 DamageEvent 着色
+        LivingEntity target = event.getEntity();
+        if (!target.level().isClientSide && !isDuMmmMmmyDummy(target)) {
+            PENDING_TIER.put(target.getId(), tier);
+        }
+
+        // 假人只喂倍率，数字由它自己显示
+        if (!target.level().isClientSide
+                && isDuMmmMmmyDummy(target)
+                && multiplier > 1.0D + 1.0E-6D
+                && event.getSource().getEntity() instanceof LivingEntity attacker) {
+            DummmmmmyCompat.tryFeedCrit(target, attacker, (float) multiplier);
         }
     }
 
-    // 判断受击目标是否为 DuMmmMmmy 假人。直接用实体类型的注册名判断，不依赖对 DuMmmMmmy 的编译期依赖。
+    // 只显示不结算：DamageEvent 的 amount 是护甲结算后的真实扣血，颜色用刚记录的 tier
+    @SubscribeEvent(priority = EventPriority.LOWEST)
+    public static void onLivingDamage(LivingDamageEvent event) {
+        LivingEntity target = event.getEntity();
+        // 服务端才显示；假人自行显示，跳过避免重复
+        if (target.level().isClientSide || isDuMmmMmmyDummy(target)) {
+            return;
+        }
+        NetworkHandler.sendDamageNumber(target, event.getAmount(), resolveTier(target, event));
+    }
+
+    // 优先用记录的 tier，没记录则按攻击者暴击率兜底
+    private static int resolveTier(LivingEntity target, LivingDamageEvent event) {
+        Integer tier = PENDING_TIER.remove(target.getId());
+        if (tier != null) {
+            return tier;
+        }
+        return critColorTier(event);
+    }
+
+    // 兜底：按攻击者暴击率取档位，无攻击者/属性缺失按白
+    private static int critColorTier(LivingDamageEvent event) {
+        if (event.getSource().getEntity() instanceof LivingEntity attacker) {
+            AttributeInstance chanceIns = attacker.getAttribute(FusedConfig.normalizeRate());
+            if (chanceIns != null) {
+                return (int) Math.floor(chanceIns.getValue());
+            }
+        }
+        return 0;
+    }
+
+    // 按注册名判断假人，不依赖编译期引用
     private static boolean isDuMmmMmmyDummy(LivingEntity entity) {
         ResourceLocation type = ForgeRegistries.ENTITY_TYPES.getKey(entity.getType());
         return type != null && "dummmmmmy".equals(type.getNamespace()) && "target_dummy".equals(type.getPath());
     }
 
-    // 解析本次伤害的暴击参数 [critChance, critDamage]。
-    // 攻击者存在就读其自有属性；属性没挂到实体（未绑定类型）则返回 null（无暴击）。
-    // 攻击者不存在（无来源实体）就用默认 0.2 / 1.5。
+    // 读取攻击者的暴击参数；无攻击者用默认值，属性未绑定返回 null
     private static double[] resolveParams(LivingHurtEvent event) {
         if (event.getSource().getEntity() instanceof LivingEntity attacker) {
             AttributeInstance chanceIns = attacker.getAttribute(FusedConfig.normalizeRate());

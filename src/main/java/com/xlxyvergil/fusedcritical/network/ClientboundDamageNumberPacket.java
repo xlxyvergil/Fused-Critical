@@ -7,15 +7,14 @@ import net.minecraftforge.network.NetworkEvent;
 
 import java.util.function.Supplier;
 
-// 服务端 -> 客户端「伤害数字」包：受击方实体 id、结算后的伤害值、本次命中的暴击等级。
-// 客户端收到后在受击实体头顶生成一个文本粒子，按暴击等级着色。
-// 本包在服务端与客户端都会被反序列化（服务端仅用于 setPacketHandled，不做实际渲染）；
-// 真正的客户端渲染逻辑交给 @OnlyIn(Dist.CLIENT) 的 ClientDamageNumberHandler，
-// 通过 DistExecutor.unsafeRunWhenOn(Dist.CLIENT, ...) 桥接，保证服务端永远不会加载客户端渲染代码。
+// 服务端 -> 客户端伤害数字包：受击实体 id、真实扣血、颜色档位（0 白 / 1 橙 / >=2 红）。
+// 仅打包用，渲染逻辑在 @OnlyIn 的 ClientDamageNumberHandler 里。
 public final class ClientboundDamageNumberPacket {
 
     private final int entityId;
+    // 护甲/吸收结算后的真实扣血量
     private final float amount;
+    // 颜色档位（0 白 / 1 橙 / >=2 红）
     private final int tier;
 
     public ClientboundDamageNumberPacket(int entityId, float amount, int tier) {
@@ -48,8 +47,7 @@ public final class ClientboundDamageNumberPacket {
         return this.tier;
     }
 
-    // 客户端处理：仅在客户端物理端通过 DistExecutor 桥接到 @OnlyIn 的 ClientDamageNumberHandler，
-    // 避免服务端加载/执行任何客户端渲染代码。
+    // 桥接到 @OnlyIn 的客户端处理，避免服务端加载客户端代码
     public static void handle(ClientboundDamageNumberPacket msg, Supplier<NetworkEvent.Context> ctx) {
         ctx.get().enqueueWork(() ->
                 DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> ClientDamageNumberHandler.handle(msg))

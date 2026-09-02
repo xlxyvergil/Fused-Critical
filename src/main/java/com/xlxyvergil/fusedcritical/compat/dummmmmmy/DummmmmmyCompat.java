@@ -4,10 +4,8 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraftforge.fml.ModList;
 
-// DuMmmMmmy 可选依赖的守卫门面。
-// 本类只用 ModList.isLoaded("dummmmmmy") 判断是否安装，不直接引用任何 DuMmmMmmy 类型。
-// 真正引用 TargetDummyEntity#moist 的逻辑被隔离在 DummmmmmyCritFeed，只有确认 Dummmmmmy 存在才调用它，
-// 从而避免 Dummmmmmy 缺失时 ClassLoader 解析到其类型而抛 NoClassDefFoundError。
+// DuMmmMmmy 可选依赖守卫：只用 ModList.isLoaded 判断，不直接引用 DuMmmMmmy 类型。
+// 真正调用 TargetDummyEntity#moist 的逻辑被隔离在 DummmmmmyCritFeed，只在确认安装后才调用，避免缺失时抛 NoClassDefFoundError。
 public final class DummmmmmyCompat {
 
     public static final String MODID = "dummmmmmy";
@@ -19,8 +17,7 @@ public final class DummmmmmyCompat {
         return ModList.get().isLoaded(MODID);
     }
 
-    // 假人被暴击命中时调用：把我们 mod 统合的暴击倍率喂给 DuMmmMmmy，让它按暴击规则显示数字。
-    // 只在 DuMmmMmmy 已安装时才走隔离类，否则静默跳过。调用方应保证只有产生暴击时才调用。
+    // 假人被暴击命中时，把统一后的暴击倍率喂给 DuMmmMmmy，让它按暴击规则显示。只在安装时走隔离类。
     public static void tryFeedCrit(Entity target, LivingEntity attacker, float critMultiplier) {
         if (isLoaded()) {
             DummmmmmyCritFeed.feed(target, attacker, critMultiplier);

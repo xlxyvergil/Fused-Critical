@@ -6,9 +6,7 @@ import net.minecraft.world.entity.Entity;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.api.distmarker.OnlyIn;
 
-// 纯客户端处理器：在受击实体头顶生成伤害数字粒子。
-// 标注 @OnlyIn(Dist.CLIENT)，且只通过 ClientboundDamageNumberPacket#handle 里的
-// DistExecutor.unsafeRunWhenOn(Dist.CLIENT, ...) 桥接调用，保证服务端永远不会加载/执行本类。
+// 纯客户端：受击实体头顶生成伤害数字粒子，只经网络包桥接调用
 @OnlyIn(Dist.CLIENT)
 public final class ClientDamageNumberHandler {
 

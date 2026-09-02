@@ -19,9 +19,7 @@ import net.minecraftforge.api.distmarker.OnlyIn;
 
 import java.text.DecimalFormat;
 
-// 客户端伤害数字粒子：在受击方头顶渲染一段文本数字，随暴击等级着色（普通白 / 1 级橙 / 2 级及以上红）。
-// 写法参考 DuMmmMmmy 的自定义粒子：用 Font.drawInBatch 直接绘制文本，而不是贴图精灵，
-// 因此不依赖粒子贴图纹理，也不走精灵渲染流程。
+// 受击方头顶的伤害数字粒子，用 Font.drawInBatch 直接画文本（参考 DuMmmMmmy）
 @OnlyIn(Dist.CLIENT)
 public final class DamageNumberParticle extends Particle {
 
@@ -40,7 +38,7 @@ public final class DamageNumberParticle extends Particle {
     private float visualDX = 0;
     private float prevVisualDX = 0;
 
-    // 按暴击等级取颜色：0 -> 白，1 -> 橙，>=2 -> 红
+    // 按显示颜色档位取颜色：0 -> 白，1 -> 橙，>=2 -> 红
     private static int colorForTier(int tier) {
         return tier <= 0 ? 0xFFFFFF : (tier == 1 ? 0xFF8C1A : 0xFF2020);
     }
@@ -86,9 +84,7 @@ public final class DamageNumberParticle extends Particle {
         this.prevVisualDX = this.visualDX;
         this.visualDX += (float) this.xd;
 
-        // 参考 DuMmmMmmy：让数字围绕受击点上方做椭圆运动。
-        // 尚未飞出椭圆时逐步减速（yd 减半）；飞出椭圆后彻底停住（yd/xd 归零）。
-        // 避免数字一直以 yd=1 向上飞，导致飞得又高又快、脱离受击者。
+        // 绕受击点上方做椭圆运动：未飞出椭圆时减速，飞出后停住，避免数字一直往上飞。
         if (Math.sqrt(Mth.square(this.visualDX * 1.5) + Mth.square(this.visualDY - 1)) < 0.9) {
             this.yd = this.yd / 2.0D;
         } else {

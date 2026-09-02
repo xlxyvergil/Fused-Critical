@@ -38,7 +38,7 @@ public final class NormalizeSyncEngine {
         CritNormalizer.normalize(event.getEntity());
     }
 
-    // 药水/效果生效、失效、过期时，效果给的属性修饰符会挂上或卸下
+    // 效果给属性修饰符，生效/失效/过期时重算
     @SubscribeEvent
     public static void onEffectAdded(MobEffectEvent.Added event) {
         CritNormalizer.normalize(event.getEntity());
@@ -54,9 +54,10 @@ public final class NormalizeSyncEngine {
         CritNormalizer.normalize(event.getEntity());
     }
 
-    // 击杀后动态提升属性的行为，影响的是凶手（攻击者），不是被击杀者
+    // 归一化凶手，并清理被击杀者的记录
     @SubscribeEvent
     public static void onDeath(LivingDeathEvent event) {
+        CritNormalizer.clear(event.getEntity());
         if (event.getSource().getEntity() instanceof LivingEntity killer) {
             CritNormalizer.normalize(killer);
         }
