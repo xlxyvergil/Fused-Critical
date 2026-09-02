@@ -11,7 +11,6 @@ import net.minecraftforge.network.simple.SimpleChannel;
 // 本 mod 的网络通道与发送入口。
 // CHANNEL 用静态字段初始化，register() 在 FMLCommonSetupEvent 里调用，确保加载阶段就建好通道。
 public final class NetworkHandler {
-
     private static final String PROTOCOL = "1";
     private static int nextId = 0;
 

@@ -155,10 +155,6 @@ dependencies {
     // CurseForge 的 jar 需套 fg.deobf() 重映射到开发映射；运行时由 ModList#isLoaded("curios") 守卫。
     compileOnly fg.deobf("curse.maven:curios-309927:6418456")
 
-    // Optional dependency: DuMmmMmmy (compileOnly). Compile against TargetDummyEntity#moist for the crit-compat path;
-    // 运行时由 ModList#isLoaded("dummmmmmy") 守卫，真正引用其类型的代码隔离在 DummmmmmyCritFeed。
-    compileOnly fg.deobf("curse.maven:mmmmmmmmmmmm-225738:7963208")
-
     // Example mod dependency with JEI - using fg.deobf() ensures the dependency is remapped to your development mappings
     // The JEI API is declared for compile time use, while the full JEI artifact is used at runtime
     // compileOnly fg.deobf("mezz.jei:jei-${mc_version}-common-api:${jei_version}")

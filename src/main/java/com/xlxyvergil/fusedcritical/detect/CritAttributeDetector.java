@@ -10,7 +10,7 @@ import java.util.LinkedHashSet;
 import java.util.Locale;
 import java.util.Set;
 
-// 归 0 集 = 自动扫描注册表（按路径关键字归纳）∪ zeroRateIds/zeroDamageIds 白名单，再剔除黑名单与归一接收方。
+// 归 0 集 = 自动扫描注册表（按路径关键字归纳）∪ zeroRateIds/zeroDamageIds 白名单，剔除黑名单与归一接收方。
 public final class CritAttributeDetector {
 
     private CritAttributeDetector() {}

@@ -6,7 +6,7 @@ import net.minecraftforge.common.capabilities.AutoRegisterCapability;
 import java.util.Map;
 import java.util.UUID;
 
-// 实体级归一化状态（capability）：记录本模组迁到各接收方属性上的修饰符，下次只撤销这些。
+// 实体级归一化状态（capability）：记录本模组迁到各接收方属性上的修饰符，下次只撤销这些
 @AutoRegisterCapability
 public interface ICritNormalizeCap {
 

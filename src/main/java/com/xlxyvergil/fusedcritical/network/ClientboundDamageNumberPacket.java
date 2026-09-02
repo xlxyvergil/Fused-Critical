@@ -7,8 +7,7 @@ import net.minecraftforge.network.NetworkEvent;
 
 import java.util.function.Supplier;
 
-// 服务端 -> 客户端伤害数字包：受击实体 id、真实扣血、颜色档位（0 白 / 1 橙 / >=2 红）。
-// 仅打包用，渲染逻辑在 @OnlyIn 的 ClientDamageNumberHandler 里。
+// 服务端 -> 客户端伤害数字包：受击实体 id、真实扣血、颜色档位（0 白 / 1 橙 / >=2 红）。渲染逻辑在 @OnlyIn 的 ClientDamageNumberHandler 里。
 public final class ClientboundDamageNumberPacket {
 
     private final int entityId;

@@ -14,7 +14,7 @@ import net.minecraftforge.event.AttachCapabilitiesEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 
-// capability 门面：定义、挂到实体、提供查询。
+// capability 门面：定义、挂到实体、提供查询
 @Mod.EventBusSubscriber(modid = FusedCritical.MODID)
 public final class CritNormalizeCapability {
 

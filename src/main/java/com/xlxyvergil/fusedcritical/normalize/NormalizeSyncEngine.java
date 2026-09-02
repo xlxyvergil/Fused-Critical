@@ -10,7 +10,7 @@ import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 
-// 同步引擎：在属性/装备可能变化的时机触发归一化。只做事件驱动，不做 tick 轮询（开销大）。
+// 同步引擎：在属性/装备可能变化的时机触发归一化。只做事件驱动，不做 tick 轮询（开销大）
 @Mod.EventBusSubscriber(modid = FusedCritical.MODID)
 public final class NormalizeSyncEngine {
 

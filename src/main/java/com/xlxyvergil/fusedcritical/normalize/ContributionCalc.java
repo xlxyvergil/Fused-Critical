@@ -8,7 +8,7 @@ import net.minecraft.world.entity.ai.attributes.AttributeModifier;
 import java.util.ArrayList;
 import java.util.List;
 
-// 收集外部源属性上的有效暴击修饰符，原样返回交给 CritNormalizer 复制。
+// 收集外部源属性上的有效暴击修饰符，原样返回交给 CritNormalizer 复制
 public final class ContributionCalc {
 
     private ContributionCalc() {}

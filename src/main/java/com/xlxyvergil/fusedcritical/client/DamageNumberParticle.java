@@ -38,7 +38,7 @@ public final class DamageNumberParticle extends Particle {
     private float visualDX = 0;
     private float prevVisualDX = 0;
 
-    // 按显示颜色档位取颜色：0 -> 白，1 -> 橙，>=2 -> 红
+    // 颜色档位：0 -> 白，1 -> 橙，>=2 -> 红
     private static int colorForTier(int tier) {
         return tier <= 0 ? 0xFFFFFF : (tier == 1 ? 0xFF8C1A : 0xFF2020);
     }
@@ -53,7 +53,7 @@ public final class DamageNumberParticle extends Particle {
         int g = (this.color >> 8) & 0xFF;
         int b = this.color & 0xFF;
         this.setColor(r / 255.0F, g / 255.0F, b / 255.0F);
-        // 阴影用主色压暗，保证在不同亮度下都能看清数字
+        // 阴影用主色压暗，保证不同亮度下都能看清
         this.darkColor = FastColor.ARGB32.color(255, (int) (r * 0.35F), (int) (g * 0.35F), (int) (b * 0.35F));
 
         this.text = Component.literal(AMOUNT.format(Math.abs(amount)));
@@ -84,7 +84,7 @@ public final class DamageNumberParticle extends Particle {
         this.prevVisualDX = this.visualDX;
         this.visualDX += (float) this.xd;
 
-        // 绕受击点上方做椭圆运动：未飞出椭圆时减速，飞出后停住，避免数字一直往上飞。
+        // 绕受击点上方做椭圆运动：未飞出时减速，飞出后停住，避免一直往上飞
         if (Math.sqrt(Mth.square(this.visualDX * 1.5) + Mth.square(this.visualDY - 1)) < 0.9) {
             this.yd = this.yd / 2.0D;
         } else {
@@ -105,7 +105,7 @@ public final class DamageNumberParticle extends Particle {
         pose.translate(px, py, pz);
 
         double distFromCam = new Vec3(px, py, pz).length();
-        // 按距离缩放，使不同距离下字号基本保持恒定
+        // 按距离缩放，使不同距离下字号基本恒定
         float scale = (float) (0.006F * distFromCam);
         float fade = Mth.lerp(partialTicks, this.prevFadeout, this.fadeout);
 

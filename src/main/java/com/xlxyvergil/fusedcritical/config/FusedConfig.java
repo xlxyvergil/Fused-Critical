@@ -13,8 +13,8 @@ import net.minecraftforge.registries.ForgeRegistries;
 import java.util.List;
 import java.util.Set;
 
-// 配置项：指定归 0 集（哪些暴击属性被归 0、修饰符被迁移）和归一接收方（修饰符迁到哪个属性）。
-// 归 0 集 = 自动扫描注册表（按路径关键字归纳）∪ zeroRateIds/zeroDamageIds 白名单，再剔除 blacklist 与归一接收方。
+// 配置：指定归 0 集（哪些暴击属性被归 0、修饰符被迁移）和归一接收方（修饰符迁到哪个属性）。
+// 归 0 集 = 自动扫描注册表（按路径关键字归纳）∪ zeroRateIds/zeroDamageIds 白名单，剔除 blacklist 与归一接收方。
 @Mod.EventBusSubscriber(modid = FusedCritical.MODID, bus = Mod.EventBusSubscriber.Bus.MOD)
 public final class FusedConfig {
 
@@ -22,12 +22,9 @@ public final class FusedConfig {
 
     private static final ForgeConfigSpec.Builder BUILDER = new ForgeConfigSpec.Builder();
 
-    // 需要归 0 的「暴击率」属性 id 列表（格式 modid:path）。按游戏内「暴击」搜索到的各 mod 暴击率属性整理：
-    // attributeslib:crit_chance、confluence:crit_chance、l2damagetracker:crit_rate、myosotis:cri_chance、
-    // reshapes:critical_chance，以及 FlameChaseArtifacts 把「幸运一击率」当暴击率的 flame_chase_artifacts:luck_hit_chance。
-    // 这些属性会被本模组归 0，其上的暴击修饰符迁移到 normalizeRateId 指定的接收方上。仅配置列表生效，不再自动扫描。
+    // 归 0 的暴击率属性 id 列表（modid:path）。默认含各 mod 暴击率属性，含 FlameChaseArtifacts 把「幸运一击率」当暴击率。
     private static final ForgeConfigSpec.ConfigValue<List<? extends String>> ZERO_RATE_IDS = BUILDER
-            .comment("需要归 0 的「暴击率」属性 id 列表（格式 modid:path），默认值：attributeslib:crit_chance、confluence:crit_chance、l2damagetracker:crit_rate、myosotis:cri_chance、reshapes:critical_chance、flame_chase_artifacts:luck_hit_chance。这些属性会被归 0，其上的修饰符迁移到 normalizeRateId 指定的接收方。")
+            .comment("归 0 的暴击率属性 id 列表（格式 modid:path），默认含 attributeslib:crit_chance 等各 mod 暴击率及 flame_chase_artifacts:luck_hit_chance。这些属性被归 0，修饰符迁移到 normalizeRateId 指定接收方。")
             .defineListAllowEmpty("zeroRateIds", List.of(
                     "attributeslib:crit_chance",
                     "confluence:crit_chance",
@@ -36,12 +33,9 @@ public final class FusedConfig {
                     "reshapes:critical_chance",
                     "flame_chase_artifacts:luck_hit_chance"), o -> o instanceof String);
 
-    // 需要归 0 的「暴击伤害」属性 id 列表，按游戏内「暴击」搜索整理：
-    // attributeslib:crit_damage、l2damagetracker:crit_damage、cataclysm:additional_critical_damage、
-    // myosotis:cri_damage、reshapes:critical_damage，以及 FlameChaseArtifacts 把「幸运一击倍率」当暴击伤害的
-    // flame_chase_artifacts:luck_hit_amplifier。
+    // 归 0 的暴击伤害属性 id 列表，默认含各 mod 暴击伤害属性及 flame_chase_artifacts:luck_hit_amplifier
     private static final ForgeConfigSpec.ConfigValue<List<? extends String>> ZERO_DAMAGE_IDS = BUILDER
-            .comment("需要归 0 的「暴击伤害」属性 id 列表（格式 modid:path），默认值：attributeslib:crit_damage、l2damagetracker:crit_damage、cataclysm:additional_critical_damage、myosotis:cri_damage、reshapes:critical_damage、flame_chase_artifacts:luck_hit_amplifier。这些属性会被归 0，其上的修饰符迁移到 normalizeDamageId 指定的接收方。")
+            .comment("归 0 的暴击伤害属性 id 列表（格式 modid:path），默认含 attributeslib:crit_damage 等各 mod 暴击伤害及 flame_chase_artifacts:luck_hit_amplifier。这些属性被归 0，修饰符迁移到 normalizeDamageId 指定接收方。")
             .defineListAllowEmpty("zeroDamageIds", List.of(
                     "attributeslib:crit_damage",
                     "l2damagetracker:crit_damage",
@@ -50,25 +44,31 @@ public final class FusedConfig {
                     "reshapes:critical_damage",
                     "flame_chase_artifacts:luck_hit_amplifier"), o -> o instanceof String);
 
-    // 归 0 集黑名单：从「自动扫描 + 白名单」的结果中剔除，用于排除误捕或不想归 0 的暴击属性。
+    // 归 0 集黑名单：从「自动扫描 + 白名单」结果中剔除，用于排除误捕或不想归 0 的属性
     private static final ForgeConfigSpec.ConfigValue<List<? extends String>> BLACKLIST_RATE_IDS = BUILDER
-            .comment("归 0 集黑名单（暴击率，格式 modid:path）：从自动扫描 + zeroRateIds 的结果中剔除，排除误捕或不想归 0 的属性。")
+            .comment("归 0 集黑名单（暴击率，格式 modid:path）。")
             .defineListAllowEmpty("blacklistRateIds", List.of(), o -> o instanceof String);
 
     private static final ForgeConfigSpec.ConfigValue<List<? extends String>> BLACKLIST_DAMAGE_IDS = BUILDER
-            .comment("归 0 集黑名单（暴击伤害，格式 modid:path）：从自动扫描 + zeroDamageIds 的结果中剔除。")
+            .comment("归 0 集黑名单（暴击伤害，格式 modid:path）。")
             .defineListAllowEmpty("blacklistDamageIds", List.of(), o -> o instanceof String);
 
-    // 归一接收方（暴击率）：所有被收集的暴击率修饰符都会迁移到该属性上，默认是本模组自有的 crit_chance。
-    // 该属性自身会被排除出源集合（不归 0、不收集），因此「想排除某个暴击率属性」等价于「把它设为归一接收方」。
+    // 归一接收方（暴击率）：收集到的暴击率修饰符全迁到该属性，默认本模组自有 crit_chance
+    // 该属性自身会从源集合排除（不归 0、不收集），因此「排除某属性」等价「设为归一接收方」
     private static final ForgeConfigSpec.ConfigValue<? extends String> NORMALIZE_RATE_ID = BUILDER
-            .comment("归一接收方（暴击率）：收集到的暴击率修饰符迁移到该属性上。默认 fusedcritical:crit_chance，可改为其他 mod 的属性 id（modid:path）。")
+            .comment("归一接收方（暴击率）：收集到的暴击率修饰符迁移到该属性上。默认 fusedcritical:crit_chance。")
             .define("normalizeRateId", FusedCritical.MODID + ":crit_chance");
 
-    // 归一接收方（暴击伤害）：同上，默认是本模组自有的 crit_damage。
+    // 归一接收方（暴击伤害）：同上，默认本模组自有 crit_damage
     private static final ForgeConfigSpec.ConfigValue<? extends String> NORMALIZE_DAMAGE_ID = BUILDER
-            .comment("归一接收方（暴击伤害）：收集到的暴击伤害修饰符迁移到该属性上。默认 fusedcritical:crit_damage，可改为其他 mod 的属性 id（modid:path）。")
+            .comment("归一接收方（暴击伤害）：收集到的暴击伤害修饰符迁移到该属性上。默认 fusedcritical:crit_damage。")
             .define("normalizeDamageId", FusedCritical.MODID + ":crit_damage");
+
+    // 不显示伤害数字的实体 id 列表（modid:path）：命中这些实体时本模组不发伤害数字包。默认屏蔽 Dummmmmmy 靶子，因其数字由自身显示
+    private static final ForgeConfigSpec.ConfigValue<List<? extends String>> DAMAGE_NUMBER_HIDDEN_ENTITY_IDS = BUILDER
+            .comment("不显示伤害数字的实体 id 列表（格式 modid:path）。命中时本模组不发送伤害数字包。默认仅 Dummmmmmy 靶子（dummmmmmy:target_dummy）。")
+            .defineListAllowEmpty("damageNumberHiddenEntityIds", List.of(
+                    "dummmmmmy:target_dummy"), o -> o instanceof String);
 
     public static final ForgeConfigSpec SPEC = BUILDER.build();
 
@@ -78,6 +78,7 @@ public final class FusedConfig {
     public static Set<String> blacklistDamageIds;
     public static String normalizeRateId;
     public static String normalizeDamageId;
+    public static Set<String> damageNumberHiddenEntityIds;
 
     // 接收方解析缓存
     private static Attribute cachedNormalizeRate;
@@ -97,6 +98,7 @@ public final class FusedConfig {
         blacklistDamageIds = Setcopy(BLACKLIST_DAMAGE_IDS.get());
         normalizeRateId = NORMALIZE_RATE_ID.get();
         normalizeDamageId = NORMALIZE_DAMAGE_ID.get();
+        damageNumberHiddenEntityIds = Setcopy(DAMAGE_NUMBER_HIDDEN_ENTITY_IDS.get());
         cachedNormalizeRate = null;
         cachedNormalizeDamage = null;
         cachedZeroRate = null;
@@ -151,6 +153,11 @@ public final class FusedConfig {
             cachedBlacklistDamage = resolveAll(blacklistDamageIds);
         }
         return cachedBlacklistDamage;
+    }
+
+    // 该实体类型 id（modid:path）是否命中「不显示伤害数字」屏蔽列表
+    public static boolean isDamageNumberHidden(String entityTypeId) {
+        return damageNumberHiddenEntityIds != null && damageNumberHiddenEntityIds.contains(entityTypeId);
     }
 
     private static Attribute resolve(final String id, final Attribute fallback) {

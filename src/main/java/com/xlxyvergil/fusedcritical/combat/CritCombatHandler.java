@@ -2,7 +2,6 @@ package com.xlxyvergil.fusedcritical.combat;
 
 import com.xlxyvergil.fusedcritical.FusedCritical;
 import com.xlxyvergil.fusedcritical.config.FusedConfig;
-import com.xlxyvergil.fusedcritical.compat.dummmmmmy.DummmmmmyCompat;
 import com.xlxyvergil.fusedcritical.network.NetworkHandler;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.LivingEntity;
@@ -19,6 +18,7 @@ import java.util.Map;
 
 // LivingHurtEvent 结算暴击，LivingDamageEvent 显示伤害数字。
 // 暴击走 Warframe 分级：tier = floor(crit_chance)，小数部分以概率升一级，倍率 = 1 + tier x (crit_damage - 1)。
+// 命中配置「不显示伤害数字」实体（默认 dummmmmmy:target_dummy）时只结算不显示，交给该实体自身处理。
 @Mod.EventBusSubscriber(modid = FusedCritical.MODID)
 public final class CritCombatHandler {
 
@@ -26,7 +26,7 @@ public final class CritCombatHandler {
     private static final double DEFAULT_CRIT_CHANCE = 0.2D;
     private static final double DEFAULT_CRIT_DAMAGE = 1.5D;
 
-    // 本次实际 roll 出的暴击等级，hurt 记录、damage 读取后移除，按是否真暴击着色
+    // 已 roll 出的暴击等级，hurt 记录、damage 读取后移除，按是否真暴击着色
     private static final Map<Integer, Integer> PENDING_TIER = new HashMap<>();
 
     private CritCombatHandler() {}
@@ -41,41 +41,36 @@ public final class CritCombatHandler {
         double critChance = params[0];
         double critDamage = params[1];
 
-        // Warframe 分级暴击：算本次命中的暴击等级
-        int tier = (int) Math.floor(critChance);
-        double frac = critChance - tier;
-        if (event.getEntity().getRandom().nextDouble() < frac) {
-            tier++;
+        // 命中「不显示伤害数字」实体（如假人）：只结算暴击伤害，不记录 tier、不发包
+        LivingEntity target = event.getEntity();
+        boolean hidden = isDamageNumberHidden(target);
+        if (hidden) {
+            double multiplier = multiplier(target, critChance, critDamage);
+            if (multiplier > 1.0D + 1.0E-6D) {
+                event.setAmount(event.getAmount() * (float) multiplier);
+            }
+            return;
         }
 
-        // 实际倍率 = 1 + tier x (crit_damage - 1)
+        int tier = tier(target, critChance);
         double multiplier = 1.0D + tier * (critDamage - 1.0D);
 
         if (multiplier > 1.0D + 1.0E-6D) {
             event.setAmount(event.getAmount() * (float) multiplier);
         }
 
-        // 这里的 amount 是护甲前的原始值，只在此结算；把 tier 记下来给 DamageEvent 着色
-        LivingEntity target = event.getEntity();
-        if (!target.level().isClientSide && !isDuMmmMmmyDummy(target)) {
+        // amount 是护甲前的原始值，只在此结算；记录 tier 给 DamageEvent 着色
+        if (!target.level().isClientSide) {
             PENDING_TIER.put(target.getId(), tier);
-        }
-
-        // 假人只喂倍率，数字由它自己显示
-        if (!target.level().isClientSide
-                && isDuMmmMmmyDummy(target)
-                && multiplier > 1.0D + 1.0E-6D
-                && event.getSource().getEntity() instanceof LivingEntity attacker) {
-            DummmmmmyCompat.tryFeedCrit(target, attacker, (float) multiplier);
         }
     }
 
-    // 只显示不结算：DamageEvent 的 amount 是护甲结算后的真实扣血，颜色用刚记录的 tier
+    // 只显示不结算：amount 是护甲结算后的真实扣血，颜色用刚记录的 tier
     @SubscribeEvent(priority = EventPriority.LOWEST)
     public static void onLivingDamage(LivingDamageEvent event) {
         LivingEntity target = event.getEntity();
-        // 服务端才显示；假人自行显示，跳过避免重复
-        if (target.level().isClientSide || isDuMmmMmmyDummy(target)) {
+        // 服务端才显示；命中「不显示伤害数字」实体时跳过，由其自身显示
+        if (target.level().isClientSide || isDamageNumberHidden(target)) {
             return;
         }
         NetworkHandler.sendDamageNumber(target, event.getAmount(), resolveTier(target, event));
@@ -101,10 +96,25 @@ public final class CritCombatHandler {
         return 0;
     }
 
-    // 按注册名判断假人，不依赖编译期引用
-    private static boolean isDuMmmMmmyDummy(LivingEntity entity) {
+    // 命中「不显示伤害数字」屏蔽列表则不做本模组显示
+    private static boolean isDamageNumberHidden(LivingEntity entity) {
         ResourceLocation type = ForgeRegistries.ENTITY_TYPES.getKey(entity.getType());
-        return type != null && "dummmmmmy".equals(type.getNamespace()) && "target_dummy".equals(type.getPath());
+        return type != null && FusedConfig.isDamageNumberHidden(type.toString());
+    }
+
+    // 计算暴击等级：tier = floor(crit_chance)，小数部分以概率升一级
+    private static int tier(LivingEntity target, double critChance) {
+        int tier = (int) Math.floor(critChance);
+        double frac = critChance - tier;
+        if (target.getRandom().nextDouble() < frac) {
+            tier++;
+        }
+        return tier;
+    }
+
+    // 计算暴击倍率
+    private static double multiplier(LivingEntity target, double critChance, double critDamage) {
+        return 1.0D + tier(target, critChance) * (critDamage - 1.0D);
     }
 
     // 读取攻击者的暴击参数；无攻击者用默认值，属性未绑定返回 null

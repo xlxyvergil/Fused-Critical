@@ -32,7 +32,7 @@ public final class CritNormalizer {
         migrate(entity, sources.damage(), FusedConfig.normalizeDamage());
     }
 
-    // 迁移一个类别：对每个源属性独立做「撤销上次 → 收集 → 迁移 → 归 0」，只动本类记录的 UUID
+    // 迁移一个类别：对每个源属性做「撤销上次 → 收集 → 迁移 → 归 0」，只动本类记录的 UUID
     private static int migrate(final LivingEntity entity, final Set<Attribute> srcs,
                                final Attribute target) {
         final ICritNormalizeCap cap = CritNormalizeCapability.get(entity);
