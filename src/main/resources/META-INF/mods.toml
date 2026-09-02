@@ -4,7 +4,7 @@ loaderVersion="${loader_version_range}" #mandatory
 
 authors="${author}" #optional
 
-license="All Rights Reserved" #mandatory
+license="GPL-3.0" #mandatory
 
 [[mods]] #mandatory
 
