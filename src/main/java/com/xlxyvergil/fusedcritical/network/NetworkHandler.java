@@ -3,6 +3,7 @@ package com.xlxyvergil.fusedcritical.network;
 import com.xlxyvergil.fusedcritical.FusedCritical;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.player.Player;
 import net.minecraftforge.network.NetworkDirection;
 import net.minecraftforge.network.NetworkRegistry;
 import net.minecraftforge.network.PacketDistributor;
@@ -31,9 +32,10 @@ public final class NetworkHandler {
                 .add();
     }
 
-    // 服务端：向所有追踪该受击实体的客户端发送伤害数字，只能在服务端调用
-    public static void sendDamageNumber(LivingEntity target, float amount, int tier) {
+    // 服务端：向所有追踪该受击实体的客户端发送伤害数字。是否显示（限制距离）由客户端按攻击者身份判断，只能在服务端调用
+    public static void sendDamageNumber(LivingEntity target, float amount, int tier, LivingEntity attacker) {
+        boolean attackerIsPlayer = attacker instanceof Player;
         CHANNEL.send(PacketDistributor.TRACKING_ENTITY_AND_SELF.with(() -> target),
-                new ClientboundDamageNumberPacket(target.getId(), amount, tier));
+                new ClientboundDamageNumberPacket(target.getId(), amount, tier, attackerIsPlayer));
     }
 }

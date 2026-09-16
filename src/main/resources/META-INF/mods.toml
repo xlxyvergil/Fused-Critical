@@ -36,3 +36,10 @@ description='''${desc}'''
     versionRange="[5,)"
     ordering="AFTER"
     side="BOTH"
+
+[[dependencies.${modid}]]
+    modId="l2tabs"
+    mandatory=false
+    versionRange="[0.3,)"
+    ordering="AFTER"
+    side="BOTH"

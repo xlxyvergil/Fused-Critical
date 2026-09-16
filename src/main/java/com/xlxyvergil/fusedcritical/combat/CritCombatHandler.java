@@ -73,7 +73,8 @@ public final class CritCombatHandler {
         if (target.level().isClientSide || isDamageNumberHidden(target)) {
             return;
         }
-        NetworkHandler.sendDamageNumber(target, event.getAmount(), resolveTier(target, event));
+        LivingEntity attacker = event.getSource().getEntity() instanceof LivingEntity a ? a : null;
+        NetworkHandler.sendDamageNumber(target, event.getAmount(), resolveTier(target, event), attacker);
     }
 
     // 优先用记录的 tier，没记录则按攻击者暴击率兜底

@@ -15,23 +15,28 @@ public final class ClientboundDamageNumberPacket {
     private final float amount;
     // 颜色档位（0 白 / 1 橙 / >=2 红）
     private final int tier;
+    // 造成伤害的实体是否为玩家：true 客户端不限距离显示；false 仅玩家距受击目标 64 格内显示
+    private final boolean attackerIsPlayer;
 
-    public ClientboundDamageNumberPacket(int entityId, float amount, int tier) {
+    public ClientboundDamageNumberPacket(int entityId, float amount, int tier, boolean attackerIsPlayer) {
         this.entityId = entityId;
         this.amount = amount;
         this.tier = tier;
+        this.attackerIsPlayer = attackerIsPlayer;
     }
 
     public ClientboundDamageNumberPacket(FriendlyByteBuf buf) {
         this.entityId = buf.readInt();
         this.amount = buf.readFloat();
         this.tier = buf.readInt();
+        this.attackerIsPlayer = buf.readBoolean();
     }
 
     public void write(FriendlyByteBuf buf) {
         buf.writeInt(this.entityId);
         buf.writeFloat(this.amount);
         buf.writeInt(this.tier);
+        buf.writeBoolean(this.attackerIsPlayer);
     }
 
     public int entityId() {
@@ -44,6 +49,10 @@ public final class ClientboundDamageNumberPacket {
 
     public int tier() {
         return this.tier;
+    }
+
+    public boolean attackerIsPlayer() {
+        return this.attackerIsPlayer;
     }
 
     // 桥接到 @OnlyIn 的客户端处理，避免服务端加载客户端代码

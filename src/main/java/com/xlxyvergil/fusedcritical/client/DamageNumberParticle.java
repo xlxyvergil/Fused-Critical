@@ -19,7 +19,7 @@ import net.minecraftforge.api.distmarker.OnlyIn;
 
 import java.text.DecimalFormat;
 
-// 受击方头顶的伤害数字粒子，用 Font.drawInBatch 直接画文本（参考 DuMmmMmmy）
+// 受击方头顶的伤害数字粒子，用 Font.drawInBatch 直接画文本
 @OnlyIn(Dist.CLIENT)
 public final class DamageNumberParticle extends Particle {
 
@@ -38,9 +38,9 @@ public final class DamageNumberParticle extends Particle {
     private float visualDX = 0;
     private float prevVisualDX = 0;
 
-    // 颜色档位：0 -> 白，1 -> 橙，>=2 -> 红
+    // 颜色档位：0 -> 白，1 -> 橙，>=2 -> 红（均为 8 位 ARGB，前两位是 0xFF alpha，避免字层透明）
     private static int colorForTier(int tier) {
-        return tier <= 0 ? 0xFFFFFF : (tier == 1 ? 0xFF8C1A : 0xFF2020);
+        return tier <= 0 ? 0xFFFFFFFF : (tier == 1 ? 0xFFFF8C1A : 0xFFFF2020);
     }
 
     public DamageNumberParticle(ClientLevel level, double x, double y, double z,

@@ -136,11 +136,11 @@ repositories {
         }
     }
 
-    // If you have mod jar dependencies in ./libs, you can declare them as a repository like so.
+    // 本地 ./libs 目录：可选依赖 L2 Tabs 系列 jar（源码见 ck/L2Tabs-main，这里用发布 jar 编译）
     // See https://docs.gradle.org/current/userguide/declaring_repositories.html#sub:flat_dir_resolver
-    // flatDir {
-    //     dir 'libs'
-    // }
+    flatDir {
+        dir 'libs'
+    }
 }
 
 dependencies {
@@ -154,6 +154,12 @@ dependencies {
     // Optional dependency: Curios API (compileOnly). Compile against its CurioChangeEvent for the compat listener;
     // CurseForge 的 jar 需套 fg.deobf() 重映射到开发映射；运行时由 ModList#isLoaded("curios") 守卫。
     compileOnly fg.deobf("curse.maven:curios-309927:6418456")
+
+    // Optional dependency: L2 Tabs（数值面板显示替换）+ 其编译期依赖 L2 Library / L2 Serial（jar 放在 ./libs）
+    // 发布 jar 为生产映射，需套 fg.deobf() 重映射；运行时由 ModList#isLoaded("l2tabs") 守卫
+    compileOnly fg.deobf("blank:l2tabs:0.3.3")
+    compileOnly fg.deobf("blank:l2library:2.4.23-pre1")
+    compileOnly fg.deobf("blank:l2serial:1.2.2")
 
     // Example mod dependency with JEI - using fg.deobf() ensures the dependency is remapped to your development mappings
     // The JEI API is declared for compile time use, while the full JEI artifact is used at runtime

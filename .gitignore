@@ -21,5 +21,8 @@ build
 eclipse
 run
 
+# 本地可选依赖 jar（L2 Tabs / L2 Library / L2 Serial），仅用于本地编译，不入库
+libs
+
 # Files from Forge MDK
 forge*changelog.txt
