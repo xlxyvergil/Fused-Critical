@@ -12,9 +12,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.ToDoubleFunction;
 
 // 对配置的每个源属性执行「归 0 → 迁移修饰符」。
 // 迁移记录放在实体 capability 里，下次归一化只撤销本类加的部分，不误删饰品等外部修饰符。
+// 迁移数值会按源属性的换算配置折算（如灾变整数百分点属性 75 -> 0.75），未配置则原样迁移。
 public final class CritNormalizer {
 
     private CritNormalizer() {}
@@ -27,13 +29,14 @@ public final class CritNormalizer {
             return;
         }
         final CritAttributeDetector.Sources sources = CritAttributeDetector.detect();
-        migrate(entity, sources.rate(), FusedConfig.normalizeRate());
-        migrate(entity, sources.damage(), FusedConfig.normalizeDamage());
+        migrate(entity, sources.rate(), FusedConfig.normalizeRate(), FusedConfig::rateConversionOf);
+        migrate(entity, sources.damage(), FusedConfig.normalizeDamage(), FusedConfig::damageConversionOf);
     }
 
-    // 迁移一个类别：对每个源属性做「撤销上次 → 收集 → 迁移 → 归 0」，只动本类记录的 UUID
+    // 迁移一个类别：对每个源属性做「撤销上次 → 收集 → 迁移 → 归 0」，只动本类记录的 UUID。
+    // conversion 给源属性的数值换算乘数（未配置为 1.0），用于把整数百分点量纲的源属性折算成接收方的倍率量纲
     private static int migrate(final LivingEntity entity, final Set<Attribute> srcs,
-                               final Attribute target) {
+                               final Attribute target, final ToDoubleFunction<Attribute> conversion) {
         final ICritNormalizeCap cap = CritNormalizeCapability.get(entity);
         if (cap == null) {
             return 0;
@@ -52,8 +55,9 @@ public final class CritNormalizer {
                 instance.removeModifier(migratedId);
             }
             srcMap.clear();
-            // 收集源上当前的真实修饰符（排除本类 FC_ZERO/FC_MIGRATE）
+            // 收集源上当前的真实修饰符（排除本类 FC_ZERO/FC_MIGRATE），并按该源属性的换算乘数折算数值
             final List<AttributeModifier> collected = ContributionCalc.collect(entity, src);
+            final double scale = conversion.applyAsDouble(src);
             for (final AttributeModifier mod : collected) {
                 // 复用源修饰符自身的 UUID：同一加成（如同一个全属性加持）落到多个源属性时，
                 // 目标属性上只保留一份，避免同一加成被重复计数
@@ -62,7 +66,7 @@ public final class CritNormalizer {
                 // 也保证「一个加成只生效一次」
                 if (!hasModifier(instance, newId)) {
                     instance.addTransientModifier(
-                            new AttributeModifier(newId, mod.getName(), mod.getAmount(), mod.getOperation()));
+                            new AttributeModifier(newId, mod.getName(), mod.getAmount() * scale, mod.getOperation()));
                     srcMap.put(mod.getId(), newId);
                     moved++;
                 }

@@ -161,6 +161,10 @@ dependencies {
     compileOnly fg.deobf("blank:l2library:2.4.23-pre1")
     compileOnly fg.deobf("blank:l2serial:1.2.2")
 
+    // Optional dependency: Apothic Attributes（attributeslib，jar 放在 ./libs）
+    // 仅用于让自有属性的数值按百分比显示（实现其 IFormattableAttribute）；运行时由 ModList#isLoaded("attributeslib") 守卫
+    compileOnly fg.deobf("blank:ApothicAttributes-1.20.1:1.3.7")
+
     // Example mod dependency with JEI - using fg.deobf() ensures the dependency is remapped to your development mappings
     // The JEI API is declared for compile time use, while the full JEI artifact is used at runtime
     // compileOnly fg.deobf("mezz.jei:jei-${mc_version}-common-api:${jei_version}")
