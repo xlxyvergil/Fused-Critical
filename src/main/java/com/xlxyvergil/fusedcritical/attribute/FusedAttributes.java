@@ -1,8 +1,8 @@
 package com.xlxyvergil.fusedcritical.attribute;
 
 import com.xlxyvergil.fusedcritical.FusedCritical;
+import com.xlxyvergil.fusedcritical.compat.attributeslib.AttributesLibCompat;
 import net.minecraft.world.entity.ai.attributes.Attribute;
-import net.minecraft.world.entity.ai.attributes.RangedAttribute;
 import net.minecraftforge.event.entity.EntityAttributeModificationEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
@@ -17,20 +17,25 @@ public final class FusedAttributes {
 
     private FusedAttributes() {}
 
+    private static final double MAX_VALUE = 10240.0D;
+
     public static final DeferredRegister<Attribute> ATTRIBUTES =
             DeferredRegister.create(ForgeRegistries.ATTRIBUTES, FusedCritical.MODID);
 
     // 统一暴击率：1.0 = 100%，默认 0.05，最大 10240（分级暴击 tier = floor(值)）
     public static final RegistryObject<Attribute> CRIT_CHANCE = ATTRIBUTES.register(
             "crit_chance",
-            () -> new RangedAttribute("attribute.fusedcritical.crit_chance", 0.05D, 0.0D, 10240)
-                    .setSyncable(true));
+            () -> create("attribute.fusedcritical.crit_chance", 0.05D, 0.0D).setSyncable(true));
 
     // 统一暴击伤害（倍率）：1.0 = 无加成，默认 1.5，最大 10240
     public static final RegistryObject<Attribute> CRIT_DAMAGE = ATTRIBUTES.register(
             "crit_damage",
-            () -> new RangedAttribute("attribute.fusedcritical.crit_damage", 1.5D, 1.0D, 10240)
-                    .setSyncable(true));
+            () -> create("attribute.fusedcritical.crit_damage", 1.5D, 1.0D).setSyncable(true));
+
+    // 可选依赖隔离：是否用带百分比格式化的属性实现由 AttributesLibCompat 守卫决定（见 compat 包）。
+    private static Attribute create(String descriptionId, double defaultValue, double min) {
+        return AttributesLibCompat.create(descriptionId, defaultValue, min, MAX_VALUE);
+    }
 
     // 把自有暴击属性挂到所有实体上，保证宠物/怪/假人也读得到（归一接收方若为外部 mod 属性则由该 mod 自行挂载）
     @SubscribeEvent
