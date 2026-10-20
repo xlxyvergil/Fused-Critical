@@ -1,5 +1,6 @@
 package com.xlxyvergil.fusedcritical.config;
 
+import com.mojang.logging.LogUtils;
 import com.xlxyvergil.fusedcritical.FusedCritical;
 import com.xlxyvergil.fusedcritical.attribute.FusedAttributes;
 import net.minecraft.resources.ResourceLocation;
@@ -9,42 +10,52 @@ import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.event.config.ModConfigEvent;
 import net.minecraftforge.registries.ForgeRegistries;
+import org.slf4j.Logger;
 
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-// 配置：指定归 0 集（哪些暴击属性被归 0、修饰符被迁移）和归一接收方（修饰符迁到哪个属性）。
-// 归 0 集 = 自动扫描注册表（按路径关键字归纳）∪ zeroRateIds/zeroDamageIds 白名单，剔除 blacklist 与归一接收方。
+// 配置：哪些暴击率 / 暴击伤害属性要被归 0，修饰符迁到哪个归一接收方属性上。
+//
+// 解耦约定：归一化只认配置里的 critRateIds / critDamageIds 两个列表，运行期不再扫描属性注册表。
+// 首次生成配置文件时，ConfigSeeder 会把扫描结果写进这两个列表（判据是 scanSeedVersion 是否为 "0"），
+// 之后列表完全由用户维护 —— 删掉即不再归一化，新装模组后想补就手动加一行，不会被自动改回去。
 @Mod.EventBusSubscriber(modid = FusedCritical.MODID, bus = Mod.EventBusSubscriber.Bus.MOD)
 public final class FusedConfig {
 
     private FusedConfig() {}
 
+    private static final Logger LOGGER = LogUtils.getLogger();
+
     private static final ForgeConfigSpec.Builder BUILDER = new ForgeConfigSpec.Builder();
 
-    // 归 0 的暴击率属性 id 列表（modid:path）。默认含各 mod 暴击率属性，含 FlameChaseArtifacts 把「幸运一击率」当暴击率。
-    private static final ForgeConfigSpec.ConfigValue<List<? extends String>> ZERO_RATE_IDS = BUILDER
-            .comment("归 0 的暴击率属性 id 列表（格式 modid:path），默认含 attributeslib:crit_chance 等各 mod 暴击率及 flame_chase_artifacts:luck_hit_chance。这些属性被归 0，修饰符迁移到 normalizeRateId 指定接收方。")
-            .defineListAllowEmpty("zeroRateIds", List.of(
-                    "attributeslib:crit_chance",
-                    "confluence:crit_chance",
-                    "l2damagetracker:crit_rate",
-                    "myosotis:cri_chance",
-                    "reshapes:critical_chance",
-                    "flame_chase_artifacts:luck_hit_chance"), o -> o instanceof String);
+    // 归一化源（暴击率）：唯一权威列表。默认值为内置已知表，首次生成时会替换成扫描结果
+    private static final ForgeConfigSpec.ConfigValue<List<? extends String>> CRIT_RATE_IDS = BUILDER
+            .comment("需要归一化的暴击率属性 id 列表（格式 modid:path）。归一化只认这里的条目：",
+                    "列出的属性会被归 0，其修饰符迁移到 normalizeRateId 指定的接收方属性上。",
+                    "首次生成配置时会自动写入扫描到的属性；之后本列表完全由你维护 —— 删掉即不再归一化，",
+                    "想补就手动加一行（不会自动再写入，避免覆盖你的改动）。",
+                    "默认值只是内置已知表；扫描到更多属性时，首次生成会用扫描结果整体替换它。")
+            .defineListAllowEmpty("critRateIds", KnownCritIds.RATE, o -> o instanceof String);
 
-    // 归 0 的暴击伤害属性 id 列表，默认含各 mod 暴击伤害属性及 flame_chase_artifacts:luck_hit_amplifier
-    private static final ForgeConfigSpec.ConfigValue<List<? extends String>> ZERO_DAMAGE_IDS = BUILDER
-            .comment("归 0 的暴击伤害属性 id 列表（格式 modid:path），默认含 attributeslib:crit_damage 等各 mod 暴击伤害及 flame_chase_artifacts:luck_hit_amplifier。这些属性被归 0，修饰符迁移到 normalizeDamageId 指定接收方。")
-            .defineListAllowEmpty("zeroDamageIds", List.of(
-                    "attributeslib:crit_damage",
-                    "l2damagetracker:crit_damage",
-                    "cataclysm:additional_critical_damage",
-                    "myosotis:cri_damage",
-                    "reshapes:critical_damage",
-                    "flame_chase_artifacts:luck_hit_amplifier"), o -> o instanceof String);
+    // 归一化源（暴伤）：同上
+    private static final ForgeConfigSpec.ConfigValue<List<? extends String>> CRIT_DAMAGE_IDS = BUILDER
+            .comment("需要归一化的暴击伤害属性 id 列表（格式 modid:path）。语义同 critRateIds：",
+                    "列出的属性被归 0，修饰符迁移到 normalizeDamageId 指定的接收方属性上。",
+                    "默认值只是内置已知表；首次生成时会被扫描结果整体替换。")
+            .defineListAllowEmpty("critDamageIds", KnownCritIds.DAMAGE, o -> o instanceof String);
+
+    // 扫描写入标记：判据不是"配置文件在不在"，而是"配置项有没有被写入过"，
+    // 所以老配置文件升级上来也能自然补上新键并写入一次。
+    private static final ForgeConfigSpec.ConfigValue<String> SCAN_SEED_VERSION = BUILDER
+            .comment("内部标记：扫描结果是否已经写入过 critRateIds / critDamageIds。",
+                    "\"0\" = 还没写过（首次生成、或从旧版本升级上来），启动时会扫描并写入一次；",
+                    "其它值 = 已写入，之后永不再自动改这两个列表。",
+                    "请勿手改。确实想让扫描结果重新覆盖两个列表时，把它改回 \"0\" 再重启。")
+            .define("scanSeedVersion", "0");
 
     // 数值换算：部分 mod 的暴击属性以整数百分点计数（如灾变 +75 点 = +75%），迁移到本模组倍率属性前需折算。
     // 只有列在这里的源属性才折算：目标数值 = 源数值 x 乘数。未列出的属性按 1.0 原样迁移。
@@ -61,15 +72,6 @@ public final class FusedConfig {
                     + "默认含 cataclysm:additional_critical_damage=0.01。")
             .defineListAllowEmpty("damageConversion", List.of(
                     "cataclysm:additional_critical_damage=0.01"), o -> o instanceof String);
-
-    // 归 0 集黑名单：从「自动扫描 + 白名单」结果中剔除，用于排除误捕或不想归 0 的属性
-    private static final ForgeConfigSpec.ConfigValue<List<? extends String>> BLACKLIST_RATE_IDS = BUILDER
-            .comment("归 0 集黑名单（暴击率，格式 modid:path）。")
-            .defineListAllowEmpty("blacklistRateIds", List.of(), o -> o instanceof String);
-
-    private static final ForgeConfigSpec.ConfigValue<List<? extends String>> BLACKLIST_DAMAGE_IDS = BUILDER
-            .comment("归 0 集黑名单（暴击伤害，格式 modid:path）。")
-            .defineListAllowEmpty("blacklistDamageIds", List.of(), o -> o instanceof String);
 
     // 归一接收方（暴击率）：收集到的暴击率修饰符全迁到该属性，默认本模组自有 crit_chance
     // 该属性自身会从源集合排除（不归 0、不收集），因此「排除某属性」等价「设为归一接收方」
@@ -98,10 +100,10 @@ public final class FusedConfig {
 
     public static final ForgeConfigSpec SPEC = BUILDER.build();
 
-    public static Set<String> zeroRateIds;
-    public static Set<String> zeroDamageIds;
-    public static Set<String> blacklistRateIds;
-    public static Set<String> blacklistDamageIds;
+    // 归一化源（配置快照）
+    public static Set<String> critRateIds;
+    public static Set<String> critDamageIds;
+    public static String scanSeedVersion;
     public static String normalizeRateId;
     public static String normalizeDamageId;
     public static Set<String> damageNumberHiddenEntityIds;
@@ -114,11 +116,11 @@ public final class FusedConfig {
     private static Attribute cachedNormalizeRate;
     private static Attribute cachedNormalizeDamage;
 
-    // 归 0 集解析缓存
-    private static Set<Attribute> cachedZeroRate;
-    private static Set<Attribute> cachedZeroDamage;
-    private static Set<Attribute> cachedBlacklistRate;
-    private static Set<Attribute> cachedBlacklistDamage;
+    // 归一化源解析缓存
+    private static Set<Attribute> cachedCritRate;
+    private static Set<Attribute> cachedCritDamage;
+    // 「有没有任何源属性」缓存：为假时整条归一化链路直接短路
+    private static Boolean cachedHasAnySource;
 
     // 数值换算解析缓存
     private static Map<Attribute, Double> cachedRateConversion;
@@ -126,24 +128,43 @@ public final class FusedConfig {
 
     @SubscribeEvent
     public static void onLoad(final ModConfigEvent event) {
-        zeroRateIds = Setcopy(ZERO_RATE_IDS.get());
-        zeroDamageIds = Setcopy(ZERO_DAMAGE_IDS.get());
-        blacklistRateIds = Setcopy(BLACKLIST_RATE_IDS.get());
-        blacklistDamageIds = Setcopy(BLACKLIST_DAMAGE_IDS.get());
+        reloadFromValues();
+    }
+
+    // 从配置值刷新静态快照并清空解析缓存。ConfigSeeder 写入扫描结果后也会调一次
+    public static void reloadFromValues() {
+        critRateIds = toSet(CRIT_RATE_IDS.get());
+        critDamageIds = toSet(CRIT_DAMAGE_IDS.get());
+        scanSeedVersion = SCAN_SEED_VERSION.get();
         normalizeRateId = NORMALIZE_RATE_ID.get();
         normalizeDamageId = NORMALIZE_DAMAGE_ID.get();
-        damageNumberHiddenEntityIds = Setcopy(DAMAGE_NUMBER_HIDDEN_ENTITY_IDS.get());
+        damageNumberHiddenEntityIds = toSet(DAMAGE_NUMBER_HIDDEN_ENTITY_IDS.get());
         l2TabsCritDisplayMode = L2TABS_CRIT_DISPLAY_MODE.get();
         rateConversion = parseConversion(RATE_CONVERSION.get());
         damageConversion = parseConversion(DAMAGE_CONVERSION.get());
         cachedNormalizeRate = null;
         cachedNormalizeDamage = null;
-        cachedZeroRate = null;
-        cachedZeroDamage = null;
-        cachedBlacklistRate = null;
-        cachedBlacklistDamage = null;
+        cachedCritRate = null;
+        cachedCritDamage = null;
+        cachedHasAnySource = null;
         cachedRateConversion = null;
         cachedDamageConversion = null;
+    }
+
+    // 当前扫描写入标记（直接读配置值，不依赖静态快照的刷新时序）
+    public static String seedVersion() {
+        return SCAN_SEED_VERSION.get();
+    }
+
+    // ConfigSeeder 专用：把扫描结果整体写进两个列表并打上已写入标记，然后刷新快照
+    public static void writeScannedIds(final List<String> rate, final List<String> damage) {
+        CRIT_RATE_IDS.set(List.copyOf(rate));
+        CRIT_RATE_IDS.save();
+        CRIT_DAMAGE_IDS.set(List.copyOf(damage));
+        CRIT_DAMAGE_IDS.save();
+        SCAN_SEED_VERSION.set("1");
+        SCAN_SEED_VERSION.save();
+        reloadFromValues();
     }
 
     // 解析归一接收方，非法 id 回退本模组自有属性
@@ -162,40 +183,33 @@ public final class FusedConfig {
         return cachedNormalizeDamage;
     }
 
-    // 解析归 0 集，跳过未注册 id
-    public static Set<Attribute> zeroRate() {
-        if (cachedZeroRate == null) {
-            cachedZeroRate = resolveAll(zeroRateIds);
+    // 归一化源集合（暴击率）：只读配置列表，剔除两个归一接收方（否则会把自己归 0）
+    public static Set<Attribute> critRate() {
+        if (cachedCritRate == null) {
+            cachedCritRate = withoutTargets(resolveAll(critRateIds));
         }
-        return cachedZeroRate;
+        return cachedCritRate;
     }
 
-    // 解析归 0 集，跳过未注册 id
-    public static Set<Attribute> zeroDamage() {
-        if (cachedZeroDamage == null) {
-            cachedZeroDamage = resolveAll(zeroDamageIds);
+    // 归一化源集合（暴伤）：只读配置列表
+    public static Set<Attribute> critDamage() {
+        if (cachedCritDamage == null) {
+            cachedCritDamage = withoutTargets(resolveAll(critDamageIds));
         }
-        return cachedZeroDamage;
+        return cachedCritDamage;
     }
 
-    // 解析归 0 集黑名单，跳过未注册 id
-    public static Set<Attribute> blacklistRate() {
-        if (cachedBlacklistRate == null) {
-            cachedBlacklistRate = resolveAll(blacklistRateIds);
+    // 是否配置了任何归一化源属性。为假时（整合包没装任何其它暴击 mod，或用户把两个列表都清空了）
+    // CritNormalizer 整体短路，不做属性查询、不建迁移账本
+    public static boolean hasAnySource() {
+        if (cachedHasAnySource == null) {
+            cachedHasAnySource = !critRate().isEmpty() || !critDamage().isEmpty();
         }
-        return cachedBlacklistRate;
-    }
-
-    // 解析归 0 集黑名单，跳过未注册 id
-    public static Set<Attribute> blacklistDamage() {
-        if (cachedBlacklistDamage == null) {
-            cachedBlacklistDamage = resolveAll(blacklistDamageIds);
-        }
-        return cachedBlacklistDamage;
+        return cachedHasAnySource;
     }
 
     // 该实体类型 id（modid:path）是否命中「不显示伤害数字」屏蔽列表
-    public static boolean isDamageNumberHidden(String entityTypeId) {
+    public static boolean isDamageNumberHidden(final String entityTypeId) {
         return damageNumberHiddenEntityIds != null && damageNumberHiddenEntityIds.contains(entityTypeId);
     }
 
@@ -213,6 +227,14 @@ public final class FusedConfig {
             cachedDamageConversion = resolveConversion(damageConversion);
         }
         return cachedDamageConversion.getOrDefault(src, 1.0D);
+    }
+
+    // 剔除归一接收方：它们不该被归 0，也不该被当成源属性收集
+    private static Set<Attribute> withoutTargets(final Set<Attribute> src) {
+        final Set<Attribute> result = new LinkedHashSet<>(src);
+        result.remove(normalizeRate());
+        result.remove(normalizeDamage());
+        return Set.copyOf(result);
     }
 
     private static Attribute resolve(final String id, final Attribute fallback) {
@@ -268,23 +290,29 @@ public final class FusedConfig {
         return Map.copyOf(result);
     }
 
-    // 解析 id 列表为属性集合，跳过非法/未注册的 id
+    // 解析 id 列表为属性集合，跳过非法/未注册的 id（列在配置里但没装对应 mod 时会走到这里）
     private static Set<Attribute> resolveAll(final Set<String> ids) {
-        final Set<Attribute> result = new java.util.LinkedHashSet<>();
+        final Set<Attribute> result = new LinkedHashSet<>();
+        if (ids == null) {
+            return Set.of();
+        }
         for (final String id : ids) {
             final ResourceLocation rl = ResourceLocation.tryParse(id);
             if (rl == null) {
+                LOGGER.debug("[fusedcritical] 配置里的属性 id 格式非法，已忽略：{}", id);
                 continue;
             }
             final Attribute attr = ForgeRegistries.ATTRIBUTES.getValue(rl);
-            if (attr != null) {
-                result.add(attr);
+            if (attr == null) {
+                LOGGER.debug("[fusedcritical] 配置里的属性未注册（对应 mod 可能没装），已忽略：{}", id);
+                continue;
             }
+            result.add(attr);
         }
         return Set.copyOf(result);
     }
 
-    private static Set<String> Setcopy(final List<? extends String> list) {
+    private static Set<String> toSet(final List<? extends String> list) {
         return list == null ? Set.of() : Set.copyOf(list);
     }
 }

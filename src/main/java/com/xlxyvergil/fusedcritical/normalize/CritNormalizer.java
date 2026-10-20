@@ -1,7 +1,6 @@
 package com.xlxyvergil.fusedcritical.normalize;
 
 import com.xlxyvergil.fusedcritical.config.FusedConfig;
-import com.xlxyvergil.fusedcritical.detect.CritAttributeDetector;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.ai.attributes.Attribute;
 import net.minecraft.world.entity.ai.attributes.AttributeInstance;
@@ -14,7 +13,8 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.function.ToDoubleFunction;
 
-// 对配置的每个源属性执行「归 0 → 迁移修饰符」。
+// 对配置里列出的每个源属性执行「归 0 → 迁移修饰符」。
+// 源集合只来自配置（critRateIds / critDamageIds），本类不做任何注册表扫描。
 // 迁移记录放在实体 capability 里，下次归一化只撤销本类加的部分，不误删饰品等外部修饰符。
 // 迁移数值会按源属性的换算配置折算（如灾变整数百分点属性 75 -> 0.75），未配置则原样迁移。
 public final class CritNormalizer {
@@ -25,18 +25,22 @@ public final class CritNormalizer {
     private static final double ZERO_AMOUNT = -1.0D;
 
     public static void normalize(final LivingEntity entity) {
-        if (entity == null) {
+        if (entity == null || !FusedConfig.hasAnySource()) {
+            // 配置里一个源属性都没列（比如整合包没装任何其它暴击 mod）：整体短路，不做任何属性查询与记账
             return;
         }
-        final CritAttributeDetector.Sources sources = CritAttributeDetector.detect();
-        migrate(entity, sources.rate(), FusedConfig.normalizeRate(), FusedConfig::rateConversionOf);
-        migrate(entity, sources.damage(), FusedConfig.normalizeDamage(), FusedConfig::damageConversionOf);
+        migrate(entity, FusedConfig.critRate(), FusedConfig.normalizeRate(), FusedConfig::rateConversionOf);
+        migrate(entity, FusedConfig.critDamage(), FusedConfig.normalizeDamage(), FusedConfig::damageConversionOf);
     }
 
     // 迁移一个类别：对每个源属性做「撤销上次 → 收集 → 迁移 → 归 0」，只动本类记录的 UUID。
     // conversion 给源属性的数值换算乘数（未配置为 1.0），用于把整数百分点量纲的源属性折算成接收方的倍率量纲
     private static int migrate(final LivingEntity entity, final Set<Attribute> srcs,
                                final Attribute target, final ToDoubleFunction<Attribute> conversion) {
+        if (srcs.isEmpty()) {
+            // 空集合直接返回：否则下面会给接收方建一个空的账本条目，留下永不清理的垃圾
+            return 0;
+        }
         final ICritNormalizeCap cap = CritNormalizeCapability.get(entity);
         if (cap == null) {
             return 0;
