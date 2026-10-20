@@ -39,5 +39,10 @@ run/
 repo/
 !**/src/**/repo/
 
-### local optional jars (L2 Tabs / L2 Core / Curios) ###
-libs/
+### local optional jars ###
+# Curios 走官方 maven，不需要本地 jar。
+# L2 Tabs / L2 Core 没有可编程访问的公开坐标（CurseForge 仅网页下载、Modrinth 未收录），
+# 为了让 clone 下来和 CI 都能直接构建，这两个小体积 jar（约 470 KB）随仓库一起提交。
+libs/*
+!libs/l2tabs-*.jar
+!libs/l2core-*.jar

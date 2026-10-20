@@ -31,7 +31,23 @@ sourceSets.main.resources {
 repositories {
     // Add here additional repositories if required by some of the dependencies below.
 
-    // 本地 ./libs 目录：可选依赖 L2 Tabs 系列 / Curios 的发布 jar（1.21.1 起 NeoForge 使用官方映射，jar 无需重映射）
+    // Curios 官方 maven：curios-neoforge 的发布坐标（无需 CurseForge）。
+    // 版本钉死在 gradle.properties，因此用 artifact() 元数据源直接按 URL 取 jar，
+    // 省掉 maven-metadata.xml / POM 的往返查询，解析快且不受该仓库响应慢的影响。
+    maven {
+        name = "IllusiveC4 Maven"
+        url = "https://maven.theillusivec4.top/"
+        metadataSources {
+            artifact()
+        }
+        content {
+            includeGroup "top.theillusivec4.curios"
+        }
+    }
+
+    // 本地 ./libs 目录：L2 Tabs / L2 Core 的发布 jar。
+    // 这两个库没有可编程访问的公开坐标（Modrinth 上没有 L2 Tabs / L2 Core，CurseForge 只有网页下载），
+    // 1.21.1 起 NeoForge 使用官方映射，jar 无需重映射，放进 ./libs 即可编译。
     flatDir {
         dir 'libs'
     }
@@ -123,15 +139,15 @@ configurations {
 
 dependencies {
     // 可选依赖：Curios API（仅编译期）。兼容层监听 CurioChangeEvent，运行时由 ModList#isLoaded("curios") 守卫
-    compileOnly files('libs/curios-neoforge-9.5.1+1.21.1.jar')
+    compileOnly "top.theillusivec4.curios:curios-neoforge:${curios_version}"
 
-    // 可选依赖：L2 Tabs（数值面板显示改写）及其编译期依赖 L2 Core（jar 放在 ./libs）
-    // 运行时由 ModList#isLoaded("l2tabs") 守卫
+    // 可选依赖：L2 Tabs（数值面板显示改写）及其编译期依赖 L2 Core。
+    // 这两个库没有公开 maven 坐标，jar 放在 ./libs；运行时由 ModList#isLoaded("l2tabs") 守卫
     compileOnly "blank:l2tabs:3.0.5+7"
     compileOnly "blank:l2core:3.0.7+3"
 
     // 开发环境运行时依赖（仅本机测试用，不会传递给下游）
-    localRuntime files('libs/curios-neoforge-9.5.1+1.21.1.jar')
+    localRuntime "top.theillusivec4.curios:curios-neoforge:${curios_version}"
 }
 
 // 在打包资源时展开 META-INF/neoforge.mods.toml 里的 ${} 占位符（属性缺失会直接报错）。
