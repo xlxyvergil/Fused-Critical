@@ -153,6 +153,10 @@ dependencies {
 // 在打包资源时展开 META-INF/neoforge.mods.toml 里的 ${} 占位符（属性缺失会直接报错）。
 // 只对这一个文件做替换，避免误伤 assets/** 等其他资源。
 tasks.named('processResources', ProcessResources).configure {
+    // 必须显式钉 UTF-8：filteringCharset 默认取平台默认编码（中文 Windows 是 GBK），
+    // 那样 UTF-8 的源文件会被当 GBK 解码再写回，toml 里的中文注释变成非法字节，
+    // NightConfig 拒绝解析 → FML 判定 mod 无效，pre-loading 阶段直接失败。
+    filteringCharset = 'UTF-8'
     var replaceProperties = [
             minecraft_version      : minecraft_version,
             minecraft_version_range: minecraft_version_range,
