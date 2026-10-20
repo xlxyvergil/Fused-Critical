@@ -51,7 +51,7 @@ Unifies and combines the critical chance / critical damage attributes provided b
     ordering="NONE"
     side="BOTH"
 
-# 可选依赖：Curios 饰品栏（归一化在饰品变化时重新结算）
+# Optional dependency: Curios (re-normalize crit attributes when curios change)
 [[dependencies.${mod_id}]]
     modId="curios"
     type="optional"
@@ -59,7 +59,7 @@ Unifies and combines the critical chance / critical damage attributes provided b
     ordering="AFTER"
     side="BOTH"
 
-# 可选依赖：L2 Tabs 属性面板（按配置改写暴击率/暴击伤害两行）
+# Optional dependency: L2 Tabs (rewrites the crit rows in the attributes panel)
 [[dependencies.${mod_id}]]
     modId="l2tabs"
     type="optional"
