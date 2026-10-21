@@ -12,16 +12,20 @@ import net.neoforged.fml.event.config.ModConfigEvent;
 import net.neoforged.neoforge.common.ModConfigSpec;
 import org.slf4j.Logger;
 
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.SortedSet;
+import java.util.TreeSet;
 
 // 配置：哪些暴击率 / 暴击伤害属性要被归 0，修饰符迁到哪个归一接收方属性上。
 //
 // 解耦约定：归一化只认配置里的 critRateIds / critDamageIds 两个列表，运行期不再扫描属性注册表。
-// 首次生成配置文件时，ConfigSeeder 会把扫描结果写进这两个列表（判据是 scanSeedVersion 是否为 "0"），
+// 首次生成配置文件时，ConfigSeeder 会把扫描结果并入这两个列表（判据是 scanSeedVersion 是否为 "0"），
 // 之后列表完全由用户维护 —— 删掉即不再归一化，新装模组后想补就手动加一行，不会被自动改回去。
 @EventBusSubscriber(modid = FusedCritical.MODID, bus = EventBusSubscriber.Bus.MOD)
 public final class FusedConfig {
@@ -32,30 +36,45 @@ public final class FusedConfig {
 
     private static final ModConfigSpec.Builder BUILDER = new ModConfigSpec.Builder();
 
-    // 归一化源（暴击率）：唯一权威列表。默认值为内置已知表，首次生成时会替换成扫描结果
+    // 自动扫描黑名单默认值：防御向 / 减伤向词根，path 命中即不自动写入（用户可在 scanBlacklistWords 里增删）
+    private static final List<String> DEFAULT_SCAN_BLACKLIST = List.of(
+            "reduction", "resist", "taken", "received", "immun", "penalty", "dampen", "absorb");
+
+    // 归一化源（暴击率）：唯一权威列表。默认空，首次生成配置时由扫描结果并入
     private static final ModConfigSpec.ConfigValue<List<? extends String>> CRIT_RATE_IDS = BUILDER
             .comment("需要归一化的暴击率属性 id 列表（格式 modid:path）。归一化只认这里的条目：",
                     "列出的属性会被归 0，其修饰符迁移到 normalizeRateId 指定的接收方属性上。",
-                    "首次生成配置时会自动写入扫描到的属性；之后本列表完全由你维护 —— 删掉即不再归一化，",
-                    "想补就手动加一行（不会自动再写入，避免覆盖你的改动）。",
-                    "默认值只是内置已知表；扫描到更多属性时，首次生成会用扫描结果整体替换它。")
-            .defineListAllowEmpty("critRateIds", KnownCritIds.RATE, o -> o instanceof String);
+                    "默认空：首次生成配置时扫描属性注册表，把扫到的暴击率属性并入本列表；扫不到就保持为空。",
+                    "之后本列表完全由你维护 —— 删掉即不再归一化，想补就手动加一行（不会自动再写入，避免覆盖你的改动）。",
+                    "确实想让扫描再跑一次，把 scanSeedVersion 改回 \"0\" 再重启：只并入，不会删你已有的条目。")
+            .defineListAllowEmpty("critRateIds", List.of(), o -> o instanceof String);
 
     // 归一化源（暴伤）：同上
     private static final ModConfigSpec.ConfigValue<List<? extends String>> CRIT_DAMAGE_IDS = BUILDER
             .comment("需要归一化的暴击伤害属性 id 列表（格式 modid:path）。语义同 critRateIds：",
                     "列出的属性被归 0，修饰符迁移到 normalizeDamageId 指定的接收方属性上。",
-                    "默认值只是内置已知表；首次生成时会被扫描结果整体替换。")
-            .defineListAllowEmpty("critDamageIds", KnownCritIds.DAMAGE, o -> o instanceof String);
+                    "默认空，首次生成时由扫描结果并入。")
+            .defineListAllowEmpty("critDamageIds", List.of(), o -> o instanceof String);
 
     // 扫描写入标记：判据不是"配置文件在不在"，而是"配置项有没有被写入过"，
     // 所以老配置文件升级上来也能自然补上新键并写入一次。
     private static final ModConfigSpec.ConfigValue<String> SCAN_SEED_VERSION = BUILDER
-            .comment("内部标记：扫描结果是否已经写入过 critRateIds / critDamageIds。",
-                    "\"0\" = 还没写过（首次生成、或从旧版本升级上来），启动时会扫描并写入一次；",
-                    "其它值 = 已写入，之后永不再自动改这两个列表。",
-                    "请勿手改。确实想让扫描结果重新覆盖两个列表时，把它改回 \"0\" 再重启。")
+            .comment("内部标记：扫描结果是否已经并入过 critRateIds / critDamageIds。",
+                    "\"0\" = 还没并入过（首次生成、或从旧版本升级上来），启动时会扫描并并入一次；",
+                    "其它值 = 已并入过，之后永不再自动改这两个列表。",
+                    "请勿手改。确实想让扫描结果再并入一次时，把它改回 \"0\" 再重启（只增不删）。")
             .define("scanSeedVersion", "0");
+
+    // 自动扫描黑名单（子串匹配）：path 里含这些词的属性不会被自动写进上面两个列表。
+    // 只作用于扫描，不作用于手动配置 —— 手动写进 critRateIds / critDamageIds 的条目照样生效。
+    private static final ModConfigSpec.ConfigValue<List<? extends String>> SCAN_BLACKLIST_WORDS = BUILDER
+            .comment("自动扫描黑名单（子串匹配，默认含防御向词）：属性 id 的 path 含任一关键词就不被自动写入。",
+                    "默认：reduction / resist / taken / received / immun / penalty / dampen / absorb。",
+                    "作用：避免把「受到的暴击伤害」「暴击抗性」这类防御向属性当成加成归 0，再把它的修饰符反向搬到接收方属性上。",
+                    "匹配对象是去掉命名空间后的 path（按小写比较），例如 crit_damage_taken 命中 taken。",
+                    "清空本列表 = 扫描不再排除任何词；本表不影响你手动写进 critRateIds / critDamageIds 的条目。",
+                    "想要哪些属性归一化、哪些不要，最终以两个 id 列表为准。")
+            .defineListAllowEmpty("scanBlacklistWords", DEFAULT_SCAN_BLACKLIST, o -> o instanceof String);
 
     // 数值换算：部分 mod 的暴击属性以整数百分点计数（如灾变 +75 点 = +75%），迁移到本模组倍率属性前需折算。
     // 只有列在这里的源属性才折算：目标数值 = 源数值 x 乘数。未列出的属性按 1.0 原样迁移。
@@ -104,6 +123,8 @@ public final class FusedConfig {
     public static Set<String> critRateIds;
     public static Set<String> critDamageIds;
     public static String scanSeedVersion;
+    // 自动扫描黑名单（已小写、已去空白）
+    public static Set<String> scanBlacklistWords;
     public static String normalizeRateId;
     public static String normalizeDamageId;
     public static Set<String> damageNumberHiddenEntityIds;
@@ -136,6 +157,7 @@ public final class FusedConfig {
         critRateIds = toSet(CRIT_RATE_IDS.get());
         critDamageIds = toSet(CRIT_DAMAGE_IDS.get());
         scanSeedVersion = SCAN_SEED_VERSION.get();
+        scanBlacklistWords = toLowerSet(SCAN_BLACKLIST_WORDS.get());
         normalizeRateId = NORMALIZE_RATE_ID.get();
         normalizeDamageId = NORMALIZE_DAMAGE_ID.get();
         damageNumberHiddenEntityIds = toSet(DAMAGE_NUMBER_HIDDEN_ENTITY_IDS.get());
@@ -156,15 +178,27 @@ public final class FusedConfig {
         return SCAN_SEED_VERSION.get();
     }
 
-    // ConfigSeeder 专用：把扫描结果整体写进两个列表并打上已写入标记，然后刷新快照
+    // ConfigSeeder 专用：把扫描结果并入两个列表并打上已写入标记，然后刷新快照
     public static void writeScannedIds(final List<String> rate, final List<String> damage) {
-        CRIT_RATE_IDS.set(List.copyOf(rate));
+        CRIT_RATE_IDS.set(mergeWithConfigured(CRIT_RATE_IDS.get(), rate));
         CRIT_RATE_IDS.save();
-        CRIT_DAMAGE_IDS.set(List.copyOf(damage));
+        CRIT_DAMAGE_IDS.set(mergeWithConfigured(CRIT_DAMAGE_IDS.get(), damage));
         CRIT_DAMAGE_IDS.save();
         SCAN_SEED_VERSION.set("1");
         SCAN_SEED_VERSION.save();
         reloadFromValues();
+    }
+
+    // 扫描结果只做并集写回：保留用户已有条目，只往里加，不删不改
+    private static List<String> mergeWithConfigured(final List<? extends String> configured, final List<String> scanned) {
+        final SortedSet<String> merged = new TreeSet<>();
+        if (configured != null) {
+            merged.addAll(configured);
+        }
+        if (scanned != null) {
+            merged.addAll(scanned);
+        }
+        return List.copyOf(merged);
     }
 
     // 解析归一接收方，非法 id 回退本模组自有属性
@@ -211,6 +245,19 @@ public final class FusedConfig {
     // 该实体类型 id（modid:path）是否命中「不显示伤害数字」屏蔽列表
     public static boolean isDamageNumberHidden(final String entityTypeId) {
         return damageNumberHiddenEntityIds != null && damageNumberHiddenEntityIds.contains(entityTypeId);
+    }
+
+    // 属性 path（已转小写）是否命中自动扫描黑名单。空表 / 空词一律不命中
+    public static boolean isScanBlacklisted(final String lowerPath) {
+        // scanBlacklistWords 为 null 只可能是配置还没加载（正常时序下不会发生）：退回默认黑名单，
+        // 免得一次误扫描把「受到的暴伤」这类防御向属性写进配置
+        final Collection<String> words = scanBlacklistWords != null ? scanBlacklistWords : DEFAULT_SCAN_BLACKLIST;
+        for (final String word : words) {
+            if (!word.isEmpty() && lowerPath.contains(word)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     // 暴击率源属性的数值换算乘数，未配置按 1.0（原样迁移）
@@ -314,5 +361,23 @@ public final class FusedConfig {
 
     private static Set<String> toSet(final List<? extends String> list) {
         return list == null ? Set.of() : Set.copyOf(list);
+    }
+
+    // 词表归一化：去首尾空白 + 转小写 + 丢掉空项（空项会 contains 命中一切，必须剔掉）
+    private static Set<String> toLowerSet(final List<? extends String> list) {
+        if (list == null) {
+            return Set.of();
+        }
+        final Set<String> result = new LinkedHashSet<>();
+        for (final String raw : list) {
+            if (raw == null) {
+                continue;
+            }
+            final String word = raw.trim().toLowerCase(Locale.ROOT);
+            if (!word.isEmpty()) {
+                result.add(word);
+            }
+        }
+        return Set.copyOf(result);
     }
 }
