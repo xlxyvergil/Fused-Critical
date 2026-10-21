@@ -25,8 +25,7 @@ public class FusedCritical
 
     public FusedCritical(IEventBus modEventBus, ModContainer modContainer)
     {
-        // 必须在 registerConfig 之前采样：加载器读取配置时会把缺失的键补进去并保存，
-        // 采晚了就永远看到"键都齐了"，首次生成/升级时的自动扫描就再也不会触发
+        // 必须在 registerConfig 之前采样：加载器读取配置时会把缺的键补上并存盘
         ConfigSeeder.captureConfigStateBeforeLoad();
 
         modEventBus.addListener(this::commonSetup);
