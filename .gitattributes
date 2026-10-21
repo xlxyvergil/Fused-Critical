@@ -1,3 +1,25 @@
+# ---- 仓库级换行符策略 ----
+# 统一 LF 存储 + LF 检出，覆盖 Windows 上 core.autocrlf=true 的默认行为，
+# 避免「只有换行符不同」的脏 diff 和跨平台构建差异。
+* text=auto eol=lf
+
+# Windows 批处理 / PowerShell 必须 CRLF，否则 cmd 解析会出问题
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+# Gradle wrapper 的 shell 入口必须是 LF（配合仓库里记录的 100755 可执行位）
+gradlew text eol=lf
+
+# 二进制文件：不做任何文本 / 换行转换
+*.jar binary
+*.zip binary
+*.png binary
+*.jpg binary
+*.ogg binary
+*.class binary
+
+# ---- MDK 默认：生成物始终是 LF ----
 # Disable autocrlf on generated files, they always generate with LF
 # Add any extra files or paths here to make git stop saying they
 # are changed when only line endings change.
