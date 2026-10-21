@@ -22,11 +22,8 @@ import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeSet;
 
-// 配置：哪些暴击率 / 暴击伤害属性要被归 0，修饰符迁到哪个归一接收方属性上。
-//
-// 解耦约定：归一化只认配置里的 critRateIds / critDamageIds 两个列表，运行期不再扫描属性注册表。
-// 首次生成配置文件时，ConfigSeeder 会把扫描结果并入这两个列表（判据：本次启动前配置文件不存在），
-// 之后列表完全由用户维护 —— 删掉即不再归一化，新装模组后想补就手动加一行，不会被自动改回去。
+// 配置：哪些暴击率 / 暴伤属性要被归 0，修饰符迁到哪个接收方属性上。
+// 归一化只读 critRateIds / critDamageIds，运行期不扫描注册表。列表首次生成时写入扫描结果，之后由用户维护。
 @Mod.EventBusSubscriber(modid = FusedCritical.MODID, bus = Mod.EventBusSubscriber.Bus.MOD)
 public final class FusedConfig {
 
@@ -36,36 +33,30 @@ public final class FusedConfig {
 
     private static final ForgeConfigSpec.Builder BUILDER = new ForgeConfigSpec.Builder();
 
-    // 自动扫描黑名单默认值：防御向 / 减伤向词根，path 命中即不自动写入（用户可在 scanBlacklistWords 里增删）
+    // 自动扫描黑名单默认值：防御向 / 减伤向词根，命中即不自动写入
     private static final List<String> DEFAULT_SCAN_BLACKLIST = List.of(
             "reduction", "resist", "taken", "received", "immun", "penalty", "dampen", "absorb");
 
-    // 归一化源（暴击率）：唯一权威列表。默认空，首次生成配置时由扫描结果并入
+    // 归一化源（暴击率）：唯一权威列表，默认空，首次生成配置时由扫描结果并入
     private static final ForgeConfigSpec.ConfigValue<List<? extends String>> CRIT_RATE_IDS = BUILDER
-            .comment("需要归一化的暴击率属性 id 列表（格式 modid:path）。归一化只认这里的条目：",
-                    "列出的属性会被归 0，其修饰符迁移到 normalizeRateId 指定的接收方属性上。",
-                    "默认空：首次生成配置时扫描属性注册表，把扫到的暴击率属性并入本列表；扫不到就保持为空。",
-                    "之后本列表完全由你维护 —— 删掉即不再归一化，想补就手动加一行（不会自动再写入，避免覆盖你的改动）。",
-                    "确实想让扫描再跑一次：删掉整个配置文件（config/fusedcritical-common.toml）再重启，"
-                            + "其余配置项也会一并回到默认值。")
+            .comment("需要归一化的暴击率属性 id 列表（格式 modid:path）。列出的属性被归 0，",
+                    "其修饰符迁移到 normalizeRateId 指定的属性上。",
+                    "默认空，首次生成配置时由扫描结果并入；之后由你维护，删掉即不再归一化。",
+                    "想重新扫描：删掉整个配置文件再启动。")
             .defineListAllowEmpty("critRateIds", List.of(), o -> o instanceof String);
 
     // 归一化源（暴伤）：同上
     private static final ForgeConfigSpec.ConfigValue<List<? extends String>> CRIT_DAMAGE_IDS = BUILDER
-            .comment("需要归一化的暴击伤害属性 id 列表（格式 modid:path）。语义同 critRateIds：",
-                    "列出的属性被归 0，修饰符迁移到 normalizeDamageId 指定的接收方属性上。",
-                    "默认空，首次生成时由扫描结果并入。")
+            .comment("需要归一化的暴击伤害属性 id 列表（格式 modid:path），语义同 critRateIds。",
+                    "默认空，首次生成配置时由扫描结果并入。")
             .defineListAllowEmpty("critDamageIds", List.of(), o -> o instanceof String);
 
-    // 自动扫描黑名单（子串匹配）：path 里含这些词的属性不会被自动写进上面两个列表。
-    // 只作用于扫描，不作用于手动配置 —— 手动写进 critRateIds / critDamageIds 的条目照样生效。
+    // 自动扫描黑名单（子串匹配）：path 含这些词的属性不会被自动写进上面两个列表
     private static final ForgeConfigSpec.ConfigValue<List<? extends String>> SCAN_BLACKLIST_WORDS = BUILDER
-            .comment("自动扫描黑名单（子串匹配，默认含防御向词）：属性 id 的 path 含任一关键词就不被自动写入。",
-                    "默认：reduction / resist / taken / received / immun / penalty / dampen / absorb。",
-                    "作用：避免把「受到的暴击伤害」「暴击抗性」这类防御向属性当成加成归 0，再把它的修饰符反向搬到接收方属性上。",
-                    "匹配对象是去掉命名空间后的 path（按小写比较），例如 crit_damage_taken 命中 taken。",
-                    "清空本列表 = 扫描不再排除任何词；本表不影响你手动写进 critRateIds / critDamageIds 的条目。",
-                    "想要哪些属性归一化、哪些不要，最终以两个 id 列表为准。")
+            .comment("自动扫描黑名单（子串匹配）：属性 id 的 path 含任一关键词就不被自动写入。",
+                    "默认 reduction / resist / taken / received / immun / penalty / dampen / absorb，",
+                    "用来避开「受到的暴伤」「暴击抗性」这类防御向属性。",
+                    "清空即不排除任何词；只影响自动扫描，不影响你手动写进两个列表的条目。")
             .defineListAllowEmpty("scanBlacklistWords", DEFAULT_SCAN_BLACKLIST, o -> o instanceof String);
 
     // 数值换算：部分 mod 的暴击属性以整数百分点计数（如灾变 +75 点 = +75%），迁移到本模组倍率属性前需折算。
@@ -230,10 +221,9 @@ public final class FusedConfig {
         return damageNumberHiddenEntityIds != null && damageNumberHiddenEntityIds.contains(entityTypeId);
     }
 
-    // 属性 path（已转小写）是否命中自动扫描黑名单。空表 / 空词一律不命中
+    // path（已转小写）是否命中自动扫描黑名单
     public static boolean isScanBlacklisted(final String lowerPath) {
-        // scanBlacklistWords 为 null 只可能是配置还没加载（正常时序下不会发生）：退回默认黑名单，
-        // 免得一次误扫描把「受到的暴伤」这类防御向属性写进配置
+        // 配置未加载时退回默认黑名单
         final Collection<String> words = scanBlacklistWords != null ? scanBlacklistWords : DEFAULT_SCAN_BLACKLIST;
         for (final String word : words) {
             if (!word.isEmpty() && lowerPath.contains(word)) {

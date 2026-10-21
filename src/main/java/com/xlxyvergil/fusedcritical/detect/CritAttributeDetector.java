@@ -11,17 +11,10 @@ import java.util.Locale;
 import java.util.SortedSet;
 import java.util.TreeSet;
 
-// 属性注册表扫描器：只在首次生成配置时跑一次（见 ConfigSeeder），把候选属性按暴击率 / 暴伤分类成 id 列表。
-// 运行期归一化完全不经过这里 —— 归一化只读配置里的两个列表（见 FusedConfig#critRate / #critDamage）。
-//
-// 名单只有一个来源：扫属性注册表。没有内置已知表 —— 扫不到就不产生条目，想要什么自己往配置里加。
-// 命名规则是启发式的，所以这里做三件事：
-//   1. 词根覆盖多种写法：crit / critical / cri_（myosotis）/ luck_hit（FlameChaseArtifacts 把幸运一击当暴击）；
-//   2. 反向语义词直接排除：命中词根的防御向属性（"受到的暴伤""暴击抗性"）一旦被当成加成归 0，
-//      修饰符会反向迁到接收方属性上，伤害数字错得毫无征兆、在配置里也看不出来。
-//      这些词是配置项 scanBlacklistWords 的默认值（reduction / resist / taken …），用户可自行增删，清空 = 不再排除；
-//   3. 一个属性只落进一个分类（先判率、再判伤害），避免同一属性被两边各归 0 一次、修饰符被搬两次。
-// 扫描结果只是"写入配置的初始内容"，且只做并集（不删用户已有的条目），之后可在配置里任意增删。
+// 只在首次生成配置时扫描一次属性注册表（见 ConfigSeeder），按暴击率 / 暴伤分类成 id 列表。
+// 运行期归一化不经过这里，只读 FusedConfig#critRate / #critDamage。
+// 词根 crit / cri_ / luck_hit 命中后再看量纲词：chance / rate 归暴击率，damage / amplifier 归暴伤，
+// 一个属性只进一个分类；命中 scanBlacklistWords 的跳过。结果只并入，不删用户已有条目。
 public final class CritAttributeDetector {
 
     private CritAttributeDetector() {}
