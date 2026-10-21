@@ -24,6 +24,10 @@ public class FusedCritical
 
     public FusedCritical(FMLJavaModLoadingContext context)
     {
+        // 必须在 registerConfig 之前采样：Forge 读取配置时会把缺失的键补进去并保存，
+        // 采晚了就永远看到"键都齐了"，首次生成/升级时的自动扫描就再也不会触发
+        ConfigSeeder.captureConfigStateBeforeLoad();
+
         IEventBus modEventBus = context.getModEventBus();
 
         modEventBus.addListener(this::commonSetup);
@@ -41,7 +45,7 @@ public class FusedCritical
         // 属性注册已完成（COMMON_SETUP 阶段），这时才能扫描注册表。
         // 两件事都走 enqueueWork：本事件默认在并行 worker 线程上执行，注册 game bus 监听与写配置文件都不该在那里做。
         event.enqueueWork(() -> {
-            // 首次生成配置（或从旧版本升级）时把扫描到的暴击属性写进配置，之后永不自动改动
+            // 首次生成配置时把扫描到的暴击属性并入配置，之后永不自动改动
             ConfigSeeder.seedIfNeeded();
             CuriosCompat.tryInstall();
         });

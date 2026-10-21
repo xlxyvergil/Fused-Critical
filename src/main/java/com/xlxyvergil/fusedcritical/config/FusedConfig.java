@@ -25,7 +25,7 @@ import java.util.TreeSet;
 // 配置：哪些暴击率 / 暴击伤害属性要被归 0，修饰符迁到哪个归一接收方属性上。
 //
 // 解耦约定：归一化只认配置里的 critRateIds / critDamageIds 两个列表，运行期不再扫描属性注册表。
-// 首次生成配置文件时，ConfigSeeder 会把扫描结果并入这两个列表（判据是 scanSeedVersion 是否为 "0"），
+// 首次生成配置文件时，ConfigSeeder 会把扫描结果并入这两个列表（判据：本次启动前配置文件不存在），
 // 之后列表完全由用户维护 —— 删掉即不再归一化，新装模组后想补就手动加一行，不会被自动改回去。
 @Mod.EventBusSubscriber(modid = FusedCritical.MODID, bus = Mod.EventBusSubscriber.Bus.MOD)
 public final class FusedConfig {
@@ -46,7 +46,8 @@ public final class FusedConfig {
                     "列出的属性会被归 0，其修饰符迁移到 normalizeRateId 指定的接收方属性上。",
                     "默认空：首次生成配置时扫描属性注册表，把扫到的暴击率属性并入本列表；扫不到就保持为空。",
                     "之后本列表完全由你维护 —— 删掉即不再归一化，想补就手动加一行（不会自动再写入，避免覆盖你的改动）。",
-                    "确实想让扫描再跑一次，把 scanSeedVersion 改回 \"0\" 再重启：只并入，不会删你已有的条目。")
+                    "确实想让扫描再跑一次：删掉整个配置文件（config/fusedcritical-common.toml）再重启，"
+                            + "其余配置项也会一并回到默认值。")
             .defineListAllowEmpty("critRateIds", List.of(), o -> o instanceof String);
 
     // 归一化源（暴伤）：同上
@@ -55,15 +56,6 @@ public final class FusedConfig {
                     "列出的属性被归 0，修饰符迁移到 normalizeDamageId 指定的接收方属性上。",
                     "默认空，首次生成时由扫描结果并入。")
             .defineListAllowEmpty("critDamageIds", List.of(), o -> o instanceof String);
-
-    // 扫描写入标记：判据不是"配置文件在不在"，而是"配置项有没有被写入过"，
-    // 所以老配置文件升级上来也能自然补上新键并写入一次。
-    private static final ForgeConfigSpec.ConfigValue<String> SCAN_SEED_VERSION = BUILDER
-            .comment("内部标记：扫描结果是否已经并入过 critRateIds / critDamageIds。",
-                    "\"0\" = 还没并入过（首次生成、或从旧版本升级上来），启动时会扫描并并入一次；",
-                    "其它值 = 已并入过，之后永不再自动改这两个列表。",
-                    "请勿手改。确实想让扫描结果再并入一次时，把它改回 \"0\" 再重启（只增不删）。")
-            .define("scanSeedVersion", "0");
 
     // 自动扫描黑名单（子串匹配）：path 里含这些词的属性不会被自动写进上面两个列表。
     // 只作用于扫描，不作用于手动配置 —— 手动写进 critRateIds / critDamageIds 的条目照样生效。
@@ -122,7 +114,6 @@ public final class FusedConfig {
     // 归一化源（配置快照）
     public static Set<String> critRateIds;
     public static Set<String> critDamageIds;
-    public static String scanSeedVersion;
     // 自动扫描黑名单（已小写、已去空白）
     public static Set<String> scanBlacklistWords;
     public static String normalizeRateId;
@@ -156,7 +147,6 @@ public final class FusedConfig {
     public static void reloadFromValues() {
         critRateIds = toSet(CRIT_RATE_IDS.get());
         critDamageIds = toSet(CRIT_DAMAGE_IDS.get());
-        scanSeedVersion = SCAN_SEED_VERSION.get();
         scanBlacklistWords = toLowerSet(SCAN_BLACKLIST_WORDS.get());
         normalizeRateId = NORMALIZE_RATE_ID.get();
         normalizeDamageId = NORMALIZE_DAMAGE_ID.get();
@@ -173,19 +163,12 @@ public final class FusedConfig {
         cachedDamageConversion = null;
     }
 
-    // 当前扫描写入标记（直接读配置值，不依赖静态快照的刷新时序）
-    public static String seedVersion() {
-        return SCAN_SEED_VERSION.get();
-    }
-
-    // ConfigSeeder 专用：把扫描结果并入两个列表并打上已写入标记，然后刷新快照
+    // ConfigSeeder 专用：把扫描结果并入两个列表，然后刷新快照
     public static void writeScannedIds(final List<String> rate, final List<String> damage) {
         CRIT_RATE_IDS.set(mergeWithConfigured(CRIT_RATE_IDS.get(), rate));
         CRIT_RATE_IDS.save();
         CRIT_DAMAGE_IDS.set(mergeWithConfigured(CRIT_DAMAGE_IDS.get(), damage));
         CRIT_DAMAGE_IDS.save();
-        SCAN_SEED_VERSION.set("1");
-        SCAN_SEED_VERSION.save();
         reloadFromValues();
     }
 
