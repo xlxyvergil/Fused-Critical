@@ -29,6 +29,7 @@ public final class ConfigSeeder {
             "damageConversion",
             "normalizeRateId",
             "normalizeDamageId",
+            "damageNumberEnabled",
             "damageNumberHiddenEntityIds",
             "l2TabsCritDisplayMode"};
 

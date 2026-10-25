@@ -19,6 +19,8 @@
    倍率    = 1 + tier × (crit_damage - 1)
    ```
 4. **显示**：受击实体头顶漂出伤害数字，颜色按 tier 分档（0 白 / 1 橙 / ≥2 红）。
+   显示总开关 `damageNumberEnabled` **默认关闭**——不发送也不渲染任何伤害数字，交给其它伤害显示模组接管；
+   想用本模组自己的数字就把它设成 `true`。开关只拦显示，暴击结算与属性归一化照常。
 
 ## 配置（`config/fusedcritical-common.toml`）
 
@@ -29,7 +31,8 @@
 | `scanBlacklistWords` | 自动扫描黑名单（子串匹配）：path 含这些词的属性不被自动写入。默认 `reduction` / `resist` / `taken` / `received` / `immun` / `penalty` / `dampen` / `absorb`，清空即不再排除。只影响扫描，不影响你手动列进两个 id 列表的条目。 |
 | `rateConversion` / `damageConversion` | 源属性的数值换算（`modid:path=乘数`）。整数百分点型的模组必须在这里配折算系数。 |
 | `normalizeRateId` / `normalizeDamageId` | 迁移目标属性，默认本模组的两个属性。 |
-| `damageNumberHiddenEntityIds` | 不显示伤害数字的实体 id（默认 Dummmmmmy 靶子，它自己会显示）。 |
+| `damageNumberEnabled` | 伤害数字总开关，默认 `false`（关闭）：不发送也不渲染任何伤害数字，交给其它伤害显示模组接管。只拦显示，暴击结算不受影响。 |
+| `damageNumberHiddenEntityIds` | 不显示伤害数字的实体 id（默认 Dummmmmmy 靶子，它自己会显示）。总开关打开时才生效。 |
 | `l2TabsCritDisplayMode` | 装了 L2 Tabs 时，属性面板里暴击两行怎么显示：`REPLACE` / `APPEND` / `NONE`。 |
 
 ### 首次生成时的自动扫描
