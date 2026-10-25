@@ -86,6 +86,15 @@ public final class FusedConfig {
             .comment("归一接收方（暴击伤害）：收集到的暴击伤害修饰符迁移到该属性上。默认 fusedcritical:crit_damage。")
             .define("normalizeDamageId", FusedCritical.MODID + ":crit_damage");
 
+    // 伤害数字总开关：默认关闭。关闭时本模组既不发送也不渲染任何伤害数字，交给其它伤害显示模组接管；
+    // 只影响显示，暴击结算与属性归一化照常进行
+    private static final ForgeConfigSpec.BooleanValue DAMAGE_NUMBER_ENABLED = BUILDER
+            .comment("是否显示本模组自带的伤害数字。",
+                    "默认 false（关闭）：不发送也不渲染任何伤害数字，交给你另外安装的伤害显示模组接管。",
+                    "只影响显示；暴击结算与属性归一化不受影响。",
+                    "设为 true 恢复本模组自己的伤害数字。")
+            .define("damageNumberEnabled", false);
+
     // 不显示伤害数字的实体 id 列表（modid:path）：命中这些实体时本模组不发伤害数字包。默认屏蔽 Dummmmmmy 靶子，因其数字由自身显示
     private static final ForgeConfigSpec.ConfigValue<List<? extends String>> DAMAGE_NUMBER_HIDDEN_ENTITY_IDS = BUILDER
             .comment("不显示伤害数字的实体 id 列表（格式 modid:path）。命中时本模组不发送伤害数字包。默认仅 Dummmmmmy 靶子（dummmmmmy:target_dummy）。")
@@ -110,6 +119,8 @@ public final class FusedConfig {
     public static String normalizeRateId;
     public static String normalizeDamageId;
     public static Set<String> damageNumberHiddenEntityIds;
+    // 伤害数字总开关（配置快照，默认 false）
+    public static boolean damageNumberEnabled;
     public static L2TabsDisplayMode l2TabsCritDisplayMode;
     // 数值换算表：源属性 id -> 乘数
     public static Map<String, Double> rateConversion;
@@ -142,6 +153,7 @@ public final class FusedConfig {
         normalizeRateId = NORMALIZE_RATE_ID.get();
         normalizeDamageId = NORMALIZE_DAMAGE_ID.get();
         damageNumberHiddenEntityIds = toSet(DAMAGE_NUMBER_HIDDEN_ENTITY_IDS.get());
+        damageNumberEnabled = DAMAGE_NUMBER_ENABLED.get();
         l2TabsCritDisplayMode = L2TABS_CRIT_DISPLAY_MODE.get();
         rateConversion = parseConversion(RATE_CONVERSION.get());
         damageConversion = parseConversion(DAMAGE_CONVERSION.get());
@@ -214,6 +226,11 @@ public final class FusedConfig {
             cachedHasAnySource = !critRate().isEmpty() || !critDamage().isEmpty();
         }
         return cachedHasAnySource;
+    }
+
+    // 伤害数字总开关：关闭时本模组不发送、不渲染任何伤害数字
+    public static boolean isDamageNumberEnabled() {
+        return damageNumberEnabled;
     }
 
     // 该实体类型 id（modid:path）是否命中「不显示伤害数字」屏蔽列表

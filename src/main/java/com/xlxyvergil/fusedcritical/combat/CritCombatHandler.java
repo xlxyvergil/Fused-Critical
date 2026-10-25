@@ -18,7 +18,9 @@ import java.util.Map;
 
 // LivingHurtEvent 结算暴击，LivingDamageEvent 显示伤害数字。
 // 暴击走 Warframe 分级：tier = floor(crit_chance)，小数部分以概率升一级，倍率 = 1 + tier x (crit_damage - 1)。
-// 命中配置「不显示伤害数字」实体（默认 dummmmmmy:target_dummy）时只结算不显示，交给该实体自身处理。
+// 显示受两层开关控制：damageNumberEnabled 总开关（默认关，交给其它伤害显示模组），
+// 以及「不显示伤害数字」实体列表（默认 dummmmmmy:target_dummy，由该实体自身显示）。
+// 两者都只拦截显示，暴击结算照常进行。
 @Mod.EventBusSubscriber(modid = FusedCritical.MODID)
 public final class CritCombatHandler {
 
@@ -41,10 +43,10 @@ public final class CritCombatHandler {
         double critChance = params[0];
         double critDamage = params[1];
 
-        // 命中「不显示伤害数字」实体（如假人）：只结算暴击伤害，不记录 tier、不发包
+        // 总开关关闭，或命中「不显示伤害数字」实体（如假人）：只结算暴击伤害，不记录 tier、不发包
         LivingEntity target = event.getEntity();
-        boolean hidden = isDamageNumberHidden(target);
-        if (hidden) {
+        boolean suppressed = isDamageNumberSuppressed(target);
+        if (suppressed) {
             double multiplier = multiplier(target, critChance, critDamage);
             if (multiplier > 1.0D + 1.0E-6D) {
                 event.setAmount(event.getAmount() * (float) multiplier);
@@ -69,8 +71,8 @@ public final class CritCombatHandler {
     @SubscribeEvent(priority = EventPriority.LOWEST)
     public static void onLivingDamage(LivingDamageEvent event) {
         LivingEntity target = event.getEntity();
-        // 服务端才显示；命中「不显示伤害数字」实体时跳过，由其自身显示
-        if (target.level().isClientSide || isDamageNumberHidden(target)) {
+        // 服务端才显示；总开关关闭或命中「不显示伤害数字」实体时跳过
+        if (target.level().isClientSide || isDamageNumberSuppressed(target)) {
             return;
         }
         LivingEntity attacker = event.getSource().getEntity() instanceof LivingEntity a ? a : null;
@@ -95,6 +97,11 @@ public final class CritCombatHandler {
             }
         }
         return 0;
+    }
+
+    // 总开关关闭，或命中「不显示伤害数字」屏蔽列表：本模组不做任何显示
+    private static boolean isDamageNumberSuppressed(LivingEntity entity) {
+        return !FusedConfig.isDamageNumberEnabled() || isDamageNumberHidden(entity);
     }
 
     // 命中「不显示伤害数字」屏蔽列表则不做本模组显示
