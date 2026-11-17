@@ -23,7 +23,8 @@ import java.util.SortedSet;
 import java.util.TreeSet;
 
 // 配置：哪些暴击率 / 暴伤属性要被归 0，修饰符迁到哪个接收方属性上。
-// 归一化只读 critRateIds / critDamageIds，运行期不扫描注册表。列表首次生成时写入扫描结果，之后由用户维护。
+// 归一化只读 critRateIds / critDamageIds，运行期不扫描注册表。
+// 两个列表默认每次启动由 ConfigSeeder 按注册表扫描结果覆写；disableAutoScan = true 时完全不碰它们。
 @Mod.EventBusSubscriber(modid = FusedCritical.MODID, bus = Mod.EventBusSubscriber.Bus.MOD)
 public final class FusedConfig {
 
@@ -37,19 +38,27 @@ public final class FusedConfig {
     private static final List<String> DEFAULT_SCAN_BLACKLIST = List.of(
             "reduction", "resist", "taken", "received", "immun", "penalty", "dampen", "absorb");
 
-    // 归一化源（暴击率）：唯一权威列表，默认空，首次生成配置时由扫描结果并入
+    // 归一化源（暴击率）：唯一权威列表。默认每次启动按扫描结果覆写；disableAutoScan = true 时由你手写维护
     private static final ForgeConfigSpec.ConfigValue<List<? extends String>> CRIT_RATE_IDS = BUILDER
             .comment("需要归一化的暴击率属性 id 列表（格式 modid:path）。列出的属性被归 0，",
                     "其修饰符迁移到 normalizeRateId 指定的属性上。",
-                    "默认空，首次生成配置时由扫描结果并入；之后由你维护，删掉即不再归一化。",
-                    "想重新扫描：删掉整个配置文件再启动。")
+                    "默认每次启动都会按属性注册表扫描结果覆写本列表（手写条目会被清掉）。",
+                    "想手写维护：把 disableAutoScan 设为 true。删掉某项即不再归一化该属性。")
             .defineListAllowEmpty("critRateIds", List.of(), o -> o instanceof String);
 
     // 归一化源（暴伤）：同上
     private static final ForgeConfigSpec.ConfigValue<List<? extends String>> CRIT_DAMAGE_IDS = BUILDER
             .comment("需要归一化的暴击伤害属性 id 列表（格式 modid:path），语义同 critRateIds。",
-                    "默认空，首次生成配置时由扫描结果并入。")
+                    "默认每次启动都会按扫描结果覆写本列表。")
             .defineListAllowEmpty("critDamageIds", List.of(), o -> o instanceof String);
+
+    // 自动扫描总开关：true 时不扫描注册表、不改动上面两个列表，完全按手写内容归一化
+    private static final ForgeConfigSpec.BooleanValue DISABLE_AUTO_SCAN = BUILDER
+            .comment("是否关闭自动扫描：true 时启动不扫描属性注册表，也不改动 critRateIds / critDamageIds，",
+                    "完全按你手写的内容归一化。",
+                    "默认 false：每次启动都扫描注册表，并用扫描结果覆写上面两个列表（手写条目会被清掉）。",
+                    "装了新 mod 想让列表自动跟上就保持默认；想长期手写维护就设为 true。")
+            .define("disableAutoScan", false);
 
     // 自动扫描黑名单（子串匹配）：path 含这些词的属性不会被自动写进上面两个列表
     private static final ForgeConfigSpec.ConfigValue<List<? extends String>> SCAN_BLACKLIST_WORDS = BUILDER
@@ -121,6 +130,8 @@ public final class FusedConfig {
     public static Set<String> damageNumberHiddenEntityIds;
     // 伤害数字总开关（配置快照，默认 false）
     public static boolean damageNumberEnabled;
+    // 自动扫描总开关（配置快照，默认 false = 每次启动扫描并覆写两个 id 列表）
+    public static boolean disableAutoScan;
     public static L2TabsDisplayMode l2TabsCritDisplayMode;
     // 数值换算表：源属性 id -> 乘数
     public static Map<String, Double> rateConversion;
@@ -154,6 +165,7 @@ public final class FusedConfig {
         normalizeDamageId = NORMALIZE_DAMAGE_ID.get();
         damageNumberHiddenEntityIds = toSet(DAMAGE_NUMBER_HIDDEN_ENTITY_IDS.get());
         damageNumberEnabled = DAMAGE_NUMBER_ENABLED.get();
+        disableAutoScan = DISABLE_AUTO_SCAN.get();
         l2TabsCritDisplayMode = L2TABS_CRIT_DISPLAY_MODE.get();
         rateConversion = parseConversion(RATE_CONVERSION.get());
         damageConversion = parseConversion(DAMAGE_CONVERSION.get());
@@ -166,25 +178,22 @@ public final class FusedConfig {
         cachedDamageConversion = null;
     }
 
-    // ConfigSeeder 专用：把扫描结果并入两个列表，然后刷新快照
+    // ConfigSeeder 专用：用扫描结果覆写两个列表（不是并集），然后刷新快照
     public static void writeScannedIds(final List<String> rate, final List<String> damage) {
-        CRIT_RATE_IDS.set(mergeWithConfigured(CRIT_RATE_IDS.get(), rate));
+        CRIT_RATE_IDS.set(sortedCopy(rate));
         CRIT_RATE_IDS.save();
-        CRIT_DAMAGE_IDS.set(mergeWithConfigured(CRIT_DAMAGE_IDS.get(), damage));
+        CRIT_DAMAGE_IDS.set(sortedCopy(damage));
         CRIT_DAMAGE_IDS.save();
         reloadFromValues();
     }
 
-    // 扫描结果只做并集写回：保留用户已有条目，只往里加，不删不改
-    private static List<String> mergeWithConfigured(final List<? extends String> configured, final List<String> scanned) {
-        final SortedSet<String> merged = new TreeSet<>();
-        if (configured != null) {
-            merged.addAll(configured);
-        }
+    // 扫描结果直接覆写：排序后写入，和旧内容无关
+    private static List<String> sortedCopy(final List<String> scanned) {
+        final SortedSet<String> sorted = new TreeSet<>();
         if (scanned != null) {
-            merged.addAll(scanned);
+            sorted.addAll(scanned);
         }
-        return List.copyOf(merged);
+        return List.copyOf(sorted);
     }
 
     // 解析归一接收方，非法 id 回退本模组自有属性
