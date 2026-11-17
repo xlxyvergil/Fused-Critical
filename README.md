@@ -26,8 +26,9 @@
 
 | 键 | 说明 |
 |---|---|
-| `critRateIds` | **需要归一化的暴击率属性 id 列表**（`modid:path`）。归一化只认这个列表。 |
+| `critRateIds` | **需要归一化的暴击率属性 id 列表**（`modid:path`）。归一化只认这个列表；默认每次启动由扫描结果覆写。 |
 | `critDamageIds` | 同上，暴击伤害。 |
+| `disableAutoScan` | **关闭自动扫描**，默认 `false`。`false` = 每次启动扫描属性注册表并覆写上面两个列表；`true` = 完全不扫描、不碰这两个列表，按你手写的内容归一化。 |
 | `scanBlacklistWords` | 自动扫描黑名单（子串匹配）：path 含这些词的属性不被自动写入。默认 `reduction` / `resist` / `taken` / `received` / `immun` / `penalty` / `dampen` / `absorb`，清空即不再排除。只影响扫描，不影响你手动列进两个 id 列表的条目。 |
 | `rateConversion` / `damageConversion` | 源属性的数值换算（`modid:path=乘数`）。整数百分点型的模组必须在这里配折算系数。 |
 | `normalizeRateId` / `normalizeDamageId` | 迁移目标属性，默认本模组的两个属性。 |
@@ -35,11 +36,15 @@
 | `damageNumberHiddenEntityIds` | 不显示伤害数字的实体 id（默认 Dummmmmmy 靶子，它自己会显示）。总开关打开时才生效。 |
 | `l2TabsCritDisplayMode` | 装了 L2 Tabs 时，属性面板里暴击两行怎么显示：`REPLACE` / `APPEND` / `NONE`。 |
 
-### 首次生成时的自动扫描
+### 启动时的自动扫描（`disableAutoScan`）
 
-判据是配置文件里**这一版应有的配置项在不在**：文件不存在，或存在但缺少某个键（典型情况是从旧版本升级上来），就算"首次生成"。此时模组扫描属性注册表，把识别到的暴击属性按「暴击率 / 暴伤」分类**并入** `critRateIds` / `critDamageIds`。
+每次启动（`COMMON_SETUP` 阶段，属性注册表已冻结）都会扫描属性注册表，把识别到的暴击属性按「暴击率 / 暴伤」分类，**覆写** `critRateIds` / `critDamageIds`。
 
-判定只看**键在不在，不看值**——你把 `critRateIds` 里的内容清空、删掉几行，键还在，就不会被重新扫描填回去。
+- 覆写是**整体替换**，不是并集：你手写的条目会被扫描结果冲掉，删掉的条目会被扫回来
+- 想让某个属性不进名单：把它加进 `scanBlacklistWords`；想让整张名单完全手写：把 `disableAutoScan` 设成 `true`
+- `disableAutoScan = true` 时**不扫描、不写文件**，两个列表完全按你的内容生效
+- 扫不到任何暴击属性时（整合包里没有其它暴击模组）列表保持原样，不写入空列表
+- 以前那套「判断配置项齐不齐 / 文件在不在」的首次生成判据已经删掉：加载器读配置时必然先把文件写出来，那个判据在真实整合包里永远为假，扫描根本不会发生——这正是 1.0.8 及以前"列表一直为空"的原因
 
 扫描会跳过 path 含 `scanBlacklistWords` 里任一关键词的属性（默认是 `reduction` / `taken` / `resist` 这类防御向词），避免把"受到的暴击伤害""暴击抗性"当成加成归零后反向搬走。
 

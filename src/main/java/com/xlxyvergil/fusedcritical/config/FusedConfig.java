@@ -37,19 +37,29 @@ public final class FusedConfig {
     private static final List<String> DEFAULT_SCAN_BLACKLIST = List.of(
             "reduction", "resist", "taken", "received", "immun", "penalty", "dampen", "absorb");
 
-    // 归一化源（暴击率）：唯一权威列表，默认空，首次生成配置时由扫描结果并入
+    // 归一化源（暴击率）：唯一权威列表，默认空。默认每次启动由 ConfigSeeder 按注册表扫描结果覆写；
+    // disableAutoScan = true 时完全不碰它
     private static final ModConfigSpec.ConfigValue<List<? extends String>> CRIT_RATE_IDS = BUILDER
             .comment("需要归一化的暴击率属性 id 列表（格式 modid:path）。列出的属性被归 0，",
                     "其修饰符迁移到 normalizeRateId 指定的属性上。",
-                    "默认空，首次生成配置时由扫描结果并入；之后由你维护，删掉即不再归一化。",
-                    "想重新扫描：删掉整个配置文件再启动。")
+                    "默认每次启动扫描属性注册表并覆写本列表（整体替换，不是并入）。",
+                    "想手写维护：把 disableAutoScan 设为 true。")
             .defineListAllowEmpty("critRateIds", List.of(), o -> o instanceof String);
 
     // 归一化源（暴伤）：同上
     private static final ModConfigSpec.ConfigValue<List<? extends String>> CRIT_DAMAGE_IDS = BUILDER
             .comment("需要归一化的暴击伤害属性 id 列表（格式 modid:path），语义同 critRateIds。",
-                    "默认空，首次生成配置时由扫描结果并入。")
+                    "默认每次启动扫描属性注册表并覆写本列表。",
+                    "想手写维护：把 disableAutoScan 设为 true。")
             .defineListAllowEmpty("critDamageIds", List.of(), o -> o instanceof String);
+
+    // 自动扫描总开关：默认 false（每次启动扫描并覆写上面两个列表）。
+    // 设为 true 则完全不扫描、不写文件，两个列表完全按手写内容生效
+    private static final ModConfigSpec.BooleanValue DISABLE_AUTO_SCAN = BUILDER
+            .comment("是否关闭启动时的自动扫描。",
+                    "默认 false：每次启动扫描属性注册表，并按扫描结果覆写 critRateIds / critDamageIds。",
+                    "设为 true：不扫描、不写文件，两个列表完全由你手写维护。")
+            .define("disableAutoScan", false);
 
     // 自动扫描黑名单（子串匹配）：path 含这些词的属性不会被自动写进上面两个列表
     private static final ModConfigSpec.ConfigValue<List<? extends String>> SCAN_BLACKLIST_WORDS = BUILDER
@@ -114,6 +124,8 @@ public final class FusedConfig {
     // 归一化源（配置快照）
     public static Set<String> critRateIds;
     public static Set<String> critDamageIds;
+    // 自动扫描总开关（配置快照，默认 false = 每次启动扫描并覆写）
+    public static boolean disableAutoScan;
     // 自动扫描黑名单（已小写、已去空白）
     public static Set<String> scanBlacklistWords;
     public static String normalizeRateId;
@@ -149,6 +161,7 @@ public final class FusedConfig {
     public static void reloadFromValues() {
         critRateIds = toSet(CRIT_RATE_IDS.get());
         critDamageIds = toSet(CRIT_DAMAGE_IDS.get());
+        disableAutoScan = DISABLE_AUTO_SCAN.get();
         scanBlacklistWords = toLowerSet(SCAN_BLACKLIST_WORDS.get());
         normalizeRateId = NORMALIZE_RATE_ID.get();
         normalizeDamageId = NORMALIZE_DAMAGE_ID.get();
@@ -166,25 +179,22 @@ public final class FusedConfig {
         cachedDamageConversion = null;
     }
 
-    // ConfigSeeder 专用：把扫描结果并入两个列表，然后刷新快照
+    // ConfigSeeder 专用：用扫描结果覆写两个列表（整体替换，排序去重），然后刷新快照
     public static void writeScannedIds(final List<String> rate, final List<String> damage) {
-        CRIT_RATE_IDS.set(mergeWithConfigured(CRIT_RATE_IDS.get(), rate));
+        CRIT_RATE_IDS.set(sortedCopy(rate));
         CRIT_RATE_IDS.save();
-        CRIT_DAMAGE_IDS.set(mergeWithConfigured(CRIT_DAMAGE_IDS.get(), damage));
+        CRIT_DAMAGE_IDS.set(sortedCopy(damage));
         CRIT_DAMAGE_IDS.save();
         reloadFromValues();
     }
 
-    // 扫描结果只做并集写回：保留用户已有条目，只往里加，不删不改
-    private static List<String> mergeWithConfigured(final List<? extends String> configured, final List<String> scanned) {
-        final SortedSet<String> merged = new TreeSet<>();
-        if (configured != null) {
-            merged.addAll(configured);
-        }
+    // 排序去重后整体替换：扫描结果是这两个列表的唯一来源（手写维护时 disableAutoScan = true，走不到这里）
+    private static List<String> sortedCopy(final List<String> scanned) {
+        final SortedSet<String> sorted = new TreeSet<>();
         if (scanned != null) {
-            merged.addAll(scanned);
+            sorted.addAll(scanned);
         }
-        return List.copyOf(merged);
+        return List.copyOf(sorted);
     }
 
     // 解析归一接收方，非法 id 回退本模组自有属性

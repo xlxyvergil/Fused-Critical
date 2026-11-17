@@ -25,9 +25,6 @@ public class FusedCritical
 
     public FusedCritical(IEventBus modEventBus, ModContainer modContainer)
     {
-        // 必须在 registerConfig 之前采样：加载器读取配置时会把缺的键补上并存盘
-        ConfigSeeder.captureConfigStateBeforeLoad();
-
         modEventBus.addListener(this::commonSetup);
 
         // 自定义网络包注册（NeoForge 的 payload 体系在 RegisterPayloadHandlersEvent 中完成）
@@ -46,7 +43,7 @@ public class FusedCritical
         // 属性注册已完成（COMMON_SETUP 阶段），这时才能扫描注册表。
         // 两件事都走 enqueueWork：本事件默认在并行 worker 线程上执行，注册 game bus 监听与写配置文件都不该在那里做。
         event.enqueueWork(() -> {
-            // 首次生成配置时把扫描到的暴击属性并入配置，之后永不自动改动
+            // 每次启动按扫描结果覆写 critRateIds / critDamageIds（disableAutoScan = true 时跳过）
             ConfigSeeder.seedIfNeeded();
             CuriosCompat.tryInstall();
         });
